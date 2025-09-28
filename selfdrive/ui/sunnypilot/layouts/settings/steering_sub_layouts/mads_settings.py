@@ -94,8 +94,6 @@ class MadsSettingsLayout(Widget):
 
     if brand == "rivian":
       return True
-    elif brand == "tesla":
-      return not (ui_state.CP_SP and ui_state.CP_SP.flags & TeslaFlagsSP.HAS_VEHICLE_BUS)
     return False
 
   def _update_steering_mode_description(self, button_index: int):
