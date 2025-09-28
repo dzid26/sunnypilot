@@ -9,7 +9,6 @@ from openpilot.common.params import Params
 from opendbc.car import structs
 from opendbc.safety import ALTERNATIVE_EXPERIENCE
 from opendbc.sunnypilot.car.hyundai.values import HyundaiFlagsSP, HyundaiSafetyFlagsSP
-from opendbc.sunnypilot.car.tesla.values import MadsScreenButtonType, TeslaFlagsSP
 
 
 MADS_NO_ACC_MAIN_BUTTON = ("rivian", "tesla")
@@ -24,11 +23,6 @@ class MadsSteeringModeOnBrake:
 def get_mads_limited_brands(CP: structs.CarParams, CP_SP: structs.CarParamsSP, params: Params) -> bool:
   if CP.brand == 'rivian':
     return True
-  if CP.brand == 'tesla':
-    if not CP_SP.flags & TeslaFlagsSP.HAS_VEHICLE_BUS:
-      return True
-    screen_button = int(params.get("TeslaMadsScreenButton", return_default=True))
-    return screen_button == MadsScreenButtonType.OFF
 
   return False
 
