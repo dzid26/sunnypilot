@@ -14,7 +14,7 @@ from openpilot.common.realtime import DT_MDL
 from openpilot.selfdrive.car.cruise import V_CRUISE_UNSET
 from openpilot.sunnypilot.selfdrive.car import interfaces as sunnypilot_interfaces
 from openpilot.sunnypilot.selfdrive.controls.lib.speed_limit.common import Mode
-from openpilot.sunnypilot.selfdrive.controls.lib.speed_limit import PCM_LONG_REQUIRED_MAX_SET_SPEED
+from openpilot.sunnypilot.selfdrive.controls.lib.speed_limit import PCM_LONG_REQUIRED_MAX_SET_SPEED, resolve_pcm_long_required_max
 from openpilot.sunnypilot.selfdrive.controls.lib.speed_limit.speed_limit_assist import SpeedLimitAssist, \
   PRE_ACTIVE_GUARD_PERIOD, ACTIVE_STATES
 from openpilot.sunnypilot.selfdrive.selfdrived.events import EventsSP
@@ -40,8 +40,9 @@ class TestSpeedLimitAssist:
     CI = self._setup_platform(TOYOTA.TOYOTA_RAV4_TSS2)
     self.sla = SpeedLimitAssist(CI.CP)
     self.sla.pre_active_timer = int(PRE_ACTIVE_GUARD_PERIOD / DT_MDL)
-    self.pcm_long_min_set_speed = PCM_LONG_REQUIRED_MAX_SET_SPEED[self.sla.is_metric][0]
-    self.pcm_long_max_set_speed = PCM_LONG_REQUIRED_MAX_SET_SPEED[self.sla.is_metric][1]  # use 80 MPH for now
+    self.pcm_long_segments = PCM_LONG_REQUIRED_MAX_SET_SPEED[self.sla.is_metric]
+    self.pcm_long_min_set_speed = self.pcm_long_segments[0][1]
+    self.pcm_long_max_set_speed = self.pcm_long_segments[-1][1]
     self.speed_conv = CV.MS_TO_KPH if self.sla.is_metric else CV.MS_TO_MPH
 
   def teardown_method(self, method):
@@ -78,6 +79,10 @@ class TestSpeedLimitAssist:
     self.sla.v_cruise_cluster = initialize_v_cruise
     self.sla.v_cruise_cluster_prev = initialize_v_cruise
     self.sla.prev_v_cruise_cluster_conv = round(initialize_v_cruise * self.speed_conv)
+
+  def get_expected_pcm_target(self, speed_limit):
+    limit_conv = round(speed_limit * self.speed_conv)
+    return resolve_pcm_long_required_max(self.sla.is_metric, limit_conv, True)
 
   def test_initial_state(self):
     assert self.sla.state == SpeedLimitAssistState.disabled
@@ -116,9 +121,23 @@ class TestSpeedLimitAssist:
     assert self.sla.target_set_speed_conv == expected_low_conv
     assert self.sla.apply_confirm_speed_threshold
 
+  def test_pcm_long_required_max_set_speed_mid_segment(self):
+    highway_limit = SPEED_LIMITS['highway']  # 65 mph
+    expected_mid_conv = round(self.get_expected_pcm_target(highway_limit) * self.speed_conv)
+
+    self.sla.state = SpeedLimitAssistState.pending
+    self.sla.v_cruise_cluster_prev = highway_limit
+    self.sla.prev_v_cruise_cluster_conv = round(highway_limit * self.speed_conv)
+
+    self.sla.update(True, False, highway_limit, 0, highway_limit, highway_limit, highway_limit, True, 0, self.events_sp)
+
+    assert self.sla.target_set_speed_conv == expected_mid_conv
+    assert not self.sla.apply_confirm_speed_threshold
+
   def test_preactive_to_active_with_max_speed_confirmation(self):
     self.sla.state = SpeedLimitAssistState.preActive
-    self.sla.update(True, False, SPEED_LIMITS['city'], 0, self.pcm_long_max_set_speed, SPEED_LIMITS['highway'],
+    target_v_cruise = self.get_expected_pcm_target(SPEED_LIMITS['highway'])
+    self.sla.update(True, False, SPEED_LIMITS['city'], 0, target_v_cruise, SPEED_LIMITS['highway'],
                     SPEED_LIMITS['highway'], True, 0, self.events_sp)
     assert self.sla.state == SpeedLimitAssistState.active
     assert self.sla.is_enabled and self.sla.is_active
@@ -140,19 +159,23 @@ class TestSpeedLimitAssist:
 
   def test_pending_to_active_when_speed_limit_available(self):
     self.sla.state = SpeedLimitAssistState.pending
-    self.sla.v_cruise_cluster_prev = self.pcm_long_max_set_speed
-    self.sla.prev_v_cruise_cluster_conv = round(self.pcm_long_max_set_speed * self.speed_conv)
+    target_v_cruise = self.get_expected_pcm_target(SPEED_LIMITS['highway'])
+    target_v_cruise_conv = round(target_v_cruise * self.speed_conv)
+    self.sla.v_cruise_cluster_prev = target_v_cruise
+    self.sla.prev_v_cruise_cluster_conv = target_v_cruise_conv
 
-    self.sla.update(True, False, SPEED_LIMITS['highway'], 0, self.pcm_long_max_set_speed,
+    self.sla.update(True, False, SPEED_LIMITS['highway'], 0, target_v_cruise,
                     SPEED_LIMITS['highway'], SPEED_LIMITS['highway'], True, 0, self.events_sp)
     assert self.sla.state == SpeedLimitAssistState.active
 
   def test_pending_to_adapting_when_below_speed_limit(self):
     self.sla.state = SpeedLimitAssistState.pending
-    self.sla.v_cruise_cluster_prev = self.pcm_long_max_set_speed
-    self.sla.prev_v_cruise_cluster_conv = round(self.pcm_long_max_set_speed * self.speed_conv)
+    target_v_cruise = self.get_expected_pcm_target(SPEED_LIMITS['highway'])
+    target_v_cruise_conv = round(target_v_cruise * self.speed_conv)
+    self.sla.v_cruise_cluster_prev = target_v_cruise
+    self.sla.prev_v_cruise_cluster_conv = target_v_cruise_conv
 
-    self.sla.update(True, False, SPEED_LIMITS['highway'] + 5, 0, self.pcm_long_max_set_speed,
+    self.sla.update(True, False, SPEED_LIMITS['highway'] + 5, 0, target_v_cruise,
                     SPEED_LIMITS['highway'], SPEED_LIMITS['highway'], True, 0, self.events_sp)
     assert self.sla.state == SpeedLimitAssistState.adapting
     assert self.sla.is_enabled and self.sla.is_active
