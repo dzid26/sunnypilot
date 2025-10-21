@@ -5,6 +5,7 @@ This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
 from cereal import custom
+import pytest
 
 from opendbc.car.car_helpers import interfaces
 from opendbc.car.toyota.values import CAR as TOYOTA
@@ -109,8 +110,8 @@ class TestSpeedLimitAssist:
     assert self.sla.is_enabled and not self.sla.is_active
 
   def test_pcm_long_required_max_set_speed_low_value(self):
-    expected_low_conv = round(self.pcm_long_min_set_speed * self.speed_conv)
     city_limit = SPEED_LIMITS['city']
+    expected_low_conv = round(self.get_expected_pcm_target(city_limit) * self.speed_conv)
 
     self.sla.state = SpeedLimitAssistState.pending
     self.sla.v_cruise_cluster_prev = city_limit
@@ -133,6 +134,31 @@ class TestSpeedLimitAssist:
 
     assert self.sla.target_set_speed_conv == expected_mid_conv
     assert not self.sla.apply_confirm_speed_threshold
+
+  def test_resolve_pcm_metric_threshold_boundary(self):
+    boundary_value = resolve_pcm_long_required_max(True, 50, True)
+    above_boundary_value = resolve_pcm_long_required_max(True, 51, True)
+
+    assert boundary_value == pytest.approx(13.8888889)
+    assert above_boundary_value == pytest.approx(16.6666667)
+
+  def test_pcm_long_metric_rounds_down_for_lookup(self):
+    self.params.put_bool("IsMetric", True)
+    self.sla.is_metric = True
+    self.speed_conv = CV.MS_TO_KPH
+    self.sla.pcm_op_long = True
+
+    limit_kph = 50.6
+    limit_ms = limit_kph * CV.KPH_TO_MS
+
+    self.sla._has_speed_limit = True
+    self.sla._speed_limit_final_last = limit_ms
+    self.sla._speed_limit = limit_ms
+
+    self.sla.update_calculations(limit_ms)
+
+    assert self.sla.speed_limit_final_last_conv == 51
+    assert self.sla.target_set_speed_conv == 50
 
   def test_preactive_to_active_with_max_speed_confirmation(self):
     self.sla.state = SpeedLimitAssistState.preActive

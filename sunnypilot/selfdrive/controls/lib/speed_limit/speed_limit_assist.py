@@ -4,6 +4,7 @@ Copyright (c) 2021-, Haibin Wen, sunnypilot, and a number of other contributors.
 This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
+import math
 import time
 
 from cereal import custom, car
@@ -109,8 +110,10 @@ class SpeedLimitAssist:
   def target_set_speed_confirmed(self) -> bool:
     return bool(self.v_cruise_cluster_conv == self.target_set_speed_conv)
 
-  def _resolve_pcm_long_required_max(self, limit_conv: int) -> float:
-    return resolve_pcm_long_required_max(self.is_metric, limit_conv, self._has_speed_limit)
+  def _resolve_pcm_long_required_max(self) -> float:
+    speed_conv = CV.MS_TO_KPH if self.is_metric else CV.MS_TO_MPH
+    limit_floor_conv = math.floor(self._speed_limit_final_last * speed_conv)
+    return resolve_pcm_long_required_max(self.is_metric, limit_floor_conv, self._has_speed_limit)
 
   def get_v_target_from_control(self) -> float:
     if self._has_speed_limit:
@@ -168,7 +171,7 @@ class SpeedLimitAssist:
     self.speed_limit_final_last_conv = round(self._speed_limit_final_last * speed_conv)
     self.v_cruise_cluster_conv = round(self.v_cruise_cluster * speed_conv)
 
-    pcm_long_required_max = self._resolve_pcm_long_required_max(self.speed_limit_final_last_conv)
+    pcm_long_required_max = self._resolve_pcm_long_required_max()
     pcm_long_required_max_set_speed_conv = round(pcm_long_required_max * speed_conv)
 
     self.target_set_speed_conv = pcm_long_required_max_set_speed_conv if self.pcm_op_long else self.speed_limit_final_last_conv

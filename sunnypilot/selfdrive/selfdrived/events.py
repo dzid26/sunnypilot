@@ -1,5 +1,7 @@
 import cereal.messaging as messaging
 from cereal import log, car, custom
+import math
+
 from openpilot.common.constants import CV
 from openpilot.sunnypilot.selfdrive.selfdrived.events_base import EventsBase, Priority, ET, Alert, \
   NoEntryAlert, ImmediateDisableAlert, EngagementAlert, NormalPermanentAlert, AlertCallbackType, wrong_car_mode_alert
@@ -38,7 +40,8 @@ def speed_limit_pre_active_alert(CP: car.CarParams, CS: car.CarState, sm: messag
 
   if CP.openpilotLongitudinalControl and CP.pcmCruise:
     # PCM long
-    pcm_long_required_max = resolve_pcm_long_required_max(metric, speed_limit_final_last_conv, has_speed_limit)
+    limit_floor_conv = math.floor(speed_limit_final_last * speed_conv)
+    pcm_long_required_max = resolve_pcm_long_required_max(metric, limit_floor_conv, has_speed_limit)
     pcm_long_required_max_set_speed_conv = round(pcm_long_required_max * speed_conv)
     speed_unit = "km/h" if metric else "mph"
     alert_2_str = f"Manually change set speed to {pcm_long_required_max_set_speed_conv} {speed_unit} to activate"
