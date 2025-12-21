@@ -15,12 +15,15 @@ from openpilot.selfdrive.ui.sunnypilot.mici.layouts.onboarding import SunnylinkC
 from openpilot.selfdrive.ui.sunnypilot.mici.widgets.sunnylink_pairing_dialog import SunnylinkPairingDialog
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.sunnypilot.sunnylink.api import UNREGISTERED_SUNNYLINK_DONGLE_ID
+from openpilot.sunnypilot.sunnylink.athena.sunnylinkd import SENSITIVE_PARAMS
 from openpilot.system.ui.lib.application import gui_app, MousePos, FontWeight
 from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.widgets import Widget
+from openpilot.system.ui.widgets.html_render import HtmlRenderer
 from openpilot.system.ui.widgets.label import UnifiedLabel
-from openpilot.system.ui.widgets.scroller import NavScroller
+from openpilot.system.ui.widgets.scroller import NavRawScrollPanel, NavScroller
 from openpilot.system.version import sunnylink_consent_version, sunnylink_consent_declined
+
 
 class SunnylinkInfo(Widget):
   def __init__(self):
@@ -53,6 +56,26 @@ class SunnylinkInfo(Widget):
     self.sponsor_text.set_position(self._rect.x + 20, self._rect.y + 161 - 25)
     self.sponsor_text.render()
 
+
+class SensitiveParamsModal(NavRawScrollPanel):
+  def __init__(self, params: list[str], on_close: Callable[[], None]):
+    super().__init__()
+    self.set_back_callback(on_close)
+
+    params_html = "<br>".join(f"•{p}" for p in params)
+    text = f"<b>{tr('The following parameters will be remotely writable:')}</b><br><br>{params_html}"
+    self._content = HtmlRenderer(text=text)
+
+  def _render(self, rect: rl.Rectangle):
+    content_width = int(rect.width - 40)
+    content_height = self._content.get_total_height(content_width)
+
+    scroll_content_rect = rl.Rectangle(rect.x + 20, rect.y + 20, rect.width - 40, content_height)
+    scroll_offset = round(self._scroll_panel.update(rect, content_height + 40))
+    scroll_content_rect.y += scroll_offset
+    self._content.render(scroll_content_rect)
+
+
 class SunnylinkLayoutMici(NavScroller):
   def __init__(self, back_callback: Callable):
     super().__init__()
@@ -75,6 +98,12 @@ class SunnylinkLayoutMici(NavScroller):
     self._sunnylink_uploader_toggle = BigToggle(text=tr("sunnylink uploader"), initial_state=False,
                                                 toggle_callback=self._sunnylink_uploader_callback)
 
+    self._remote_sensitive_toggle = BigToggle(
+      text=tr("sensitive parameters"),
+      initial_state=ui_state.params.get_bool("SunnylinkAllowSensitiveWrite"),
+      toggle_callback=self._on_remote_sensitive_toggle
+    )
+
     self._scroller.add_widgets([
       self._sunnylink_info,
       self._sunnylink_toggle,
@@ -82,7 +111,8 @@ class SunnylinkLayoutMici(NavScroller):
       self._sunnylink_pair_button,
       self._backup_btn,
       self._restore_btn,
-      self._sunnylink_uploader_toggle
+      self._sunnylink_uploader_toggle,
+      self._remote_sensitive_toggle,
     ])
 
   def _update_state(self):
@@ -94,6 +124,8 @@ class SunnylinkLayoutMici(NavScroller):
     self._backup_btn.set_visible(self._sunnylink_enabled)
     self._restore_btn.set_visible(self._sunnylink_enabled)
     self._sunnylink_uploader_toggle.set_visible(self._sunnylink_enabled)
+    self._remote_sensitive_toggle.set_visible(self._sunnylink_enabled)
+    self._remote_sensitive_toggle.set_checked(ui_state.params.get_bool("SunnylinkAllowSensitiveWrite"))
     self.handle_backup_restore_progress()
 
     self._sunnylink_info.device_id_text.set_text(ui_state.params.get("SunnylinkDongleId") or UNREGISTERED_SUNNYLINK_DONGLE_ID)
@@ -165,6 +197,44 @@ class SunnylinkLayoutMici(NavScroller):
   @staticmethod
   def _sunnylink_uploader_callback(state: bool):
     ui_state.params.put_bool("EnableSunnylinkUploader", state)
+
+  def _on_remote_sensitive_toggle(self, state: bool):
+    if not state:
+      ui_state.params.put_bool("SunnylinkAllowSensitiveWrite", False)
+      return
+
+    # Revert toggle until the user completes the confirmation flow.
+    self._remote_sensitive_toggle.set_checked(False)
+    ui_state.params.put_bool("SunnylinkAllowSensitiveWrite", False)
+
+    warn_icon = gui_app.texture("icons_mici/exclamation_point.png", 64, 64)
+
+    def on_final_confirm():
+      ui_state.params.put_bool("SunnylinkAllowSensitiveWrite", True)
+      self._remote_sensitive_toggle.set_checked(True)
+
+    def show_final_confirm():
+      dlg3 = BigConfirmationDialog(
+        tr("slide to allow\nsensitive params"),
+        warn_icon,
+        confirm_callback=on_final_confirm,
+        red=True,
+      )
+      gui_app.push_widget(dlg3)
+
+    def show_params_list():
+      sorted_params = sorted(SENSITIVE_PARAMS)
+      dlg2 = SensitiveParamsModal(sorted_params, on_close=show_final_confirm)
+      gui_app.push_widget(dlg2)
+
+    warning_msg = tr("Allow modification of sensitive parameters")
+    dlg = BigConfirmationDialog(
+      f"{warning_msg}\n\n{tr('swipe to review sensitive params')}",
+      warn_icon,
+      confirm_callback=show_params_list,
+      red=True,
+    )
+    gui_app.push_widget(dlg)
 
   def _handle_backup_restore_btn(self, restore: bool = False):
     lbl = tr("slide to restore") if restore else tr("slide to backup")

@@ -1243,6 +1243,10 @@
     "title": "Subaru Stop and Go Manual Parking Brake",
     "description": ""
   },
+  "SunnylinkAllowSensitiveWrite": {
+    "title": "sunnylink Allow Sensitive Parameters Write",
+    "description": ""
+  },
   "SunnylinkCache_Roles": {
     "title": "sunnylink Cache  Roles",
     "description": ""
