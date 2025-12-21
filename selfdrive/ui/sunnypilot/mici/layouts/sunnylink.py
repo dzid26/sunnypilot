@@ -82,28 +82,44 @@ class SunnylinkLayoutMici(NavWidget):
   def _render(self, rect: rl.Rectangle):
     self._scroller.render(rect)
 
-  @staticmethod
-  def _sunnylink_toggle_callback(state: bool):
+  def _sunnylink_toggle_callback(self, state: bool):
     sl_consent: bool = ui_state.params.get("CompletedSunnylinkConsentVersion") == sunnylink_consent_version
     sl_enabled: bool = ui_state.params.get("SunnylinkEnabled")
 
-    def sl_terms_accepted():
-      ui_state.params.put("CompletedSunnylinkConsentVersion", sunnylink_consent_version)
+    def on_confirm():
       ui_state.params.put_bool("SunnylinkEnabled", True)
-      gui_app.set_modal_overlay(None)
+      self._sunnylink_toggle.set_checked(True)
+      ui_state.update_params()
 
-    def sl_terms_declined():
-      ui_state.params.put("CompletedSunnylinkConsentVersion", sunnylink_consent_declined)
-      ui_state.params.put_bool("SunnylinkEnabled", False)
-      gui_app.set_modal_overlay(None)
+    def show_warning():
+      warning_msg = (
+        tr("Admins can potentially access device location, state, and settings and link to online account if paired.")
+      )
+      dlg = BigDialog(tr("Warning"), warning_msg, right_btn="check", right_btn_callback=on_confirm)
+      gui_app.set_modal_overlay(dlg)
 
     if state and not sl_consent and not sl_enabled:
+      def sl_terms_accepted():
+        ui_state.params.put("CompletedSunnylinkConsentVersion", sunnylink_consent_version)
+        ui_state.update_params()
+        gui_app.set_modal_overlay(None)
+        show_warning()
+
+      def sl_terms_declined():
+        ui_state.params.put("CompletedSunnylinkConsentVersion", sunnylink_consent_declined)
+        ui_state.params.put_bool("SunnylinkEnabled", False)
+        self._sunnylink_toggle.set_checked(False)
+        ui_state.update_params()
+        gui_app.set_modal_overlay(None)
+
       sl_terms_dlg = SunnylinkConsentPage(on_accept=sl_terms_accepted, on_decline=sl_terms_declined)
       gui_app.set_modal_overlay(sl_terms_dlg)
     else:
-      ui_state.params.put_bool("SunnylinkEnabled", state)
-
-    ui_state.update_params()
+      if state:
+        show_warning()
+      else:
+        ui_state.params.put_bool("SunnylinkEnabled", False)
+        ui_state.update_params()
 
   @staticmethod
   def _sunnylink_uploader_callback(state: bool):

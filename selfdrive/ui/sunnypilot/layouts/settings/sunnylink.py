@@ -305,17 +305,37 @@ class SunnylinkLayout(Widget):
     sl_consent: bool = ui_state.params.get("CompletedSunnylinkConsentVersion") == sunnylink_consent_version
     sl_enabled: bool = ui_state.params.get_bool("SunnylinkEnabled")
 
+    def on_confirm(result):
+      enabled = result == DialogResult.CONFIRM
+      ui_state.params.put_bool("SunnylinkEnabled", enabled)
+      self._sunnylink_toggle.action_item.set_state(enabled)
+      self._update_description(enabled)
+
+    def show_warning():
+      dialog = ConfirmDialog(
+        tr("Sunnylink admins can potentially access your device state, settings, location, and github username. " +
+           "This data can be linked to your online account if paired."),
+        tr("Enable"),
+        tr("Cancel"),
+      )
+      gui_app.set_modal_overlay(dialog, callback=on_confirm)
+
     if state and not sl_consent and not sl_enabled:
       def on_consent_done():
         enabled = ui_state.params.get_bool("SunnylinkEnabled")
         self._update_description(enabled)
         gui_app.set_modal_overlay(None)
+        if enabled:
+          show_warning()
 
       sl_terms_dlg = SunnylinkConsentPage(done_callback=on_consent_done)
       gui_app.set_modal_overlay(sl_terms_dlg)
     else:
-      ui_state.params.put_bool("SunnylinkEnabled", state)
-      self._update_description(state)
+      if state:
+        show_warning()
+      else:
+        ui_state.params.put_bool("SunnylinkEnabled", False)
+        self._update_description(False)
 
   def _update_description(self, state: bool):
     if state:
