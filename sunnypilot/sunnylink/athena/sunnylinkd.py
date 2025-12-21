@@ -50,7 +50,37 @@ BLOCKED_PARAMS = {
   "GithubSshKeys",   # Direct SSH key injection
   "HasAcceptedTerms",
   "HasAcceptedTermsSP",
+  "SunnylinkAllowSensitiveWrite",
 }
+
+# Parameters blocked by default, but can be unlocked via SunnylinkAllowSensitiveWrite toggle
+SENSITIVE_PARAMS = {
+  # SSH/Authentication
+  "SshEnabled",
+  "AdbEnabled",
+  "EnableCopyparty",
+  "GsmApn",
+
+  # Remote code execution
+  "EnableGithubRunner",
+  "DisableUpdates",
+
+  # Require physical presence
+  "LongitudinalManeuverMode",
+  "JoystickDebugMode",
+
+  # Privacy
+  "RecordFront",
+  "RecordAudio",
+  "RecordAudioFeedback",
+  "EnableSunnylinkUploader",
+
+  # Identity
+  "SunnylinkDongleId",
+  "DongleId",
+  "AccessToken",
+}
+
 
 
 def handle_long_poll(ws: WebSocket, exit_event: threading.Event | None) -> None:
@@ -258,11 +288,16 @@ def getParams(params_keys: list[str], compression: bool = False) -> str | dict[s
 @dispatcher.add_method
 def saveParams(params_to_update: dict[str, str], compression: bool = False) -> None:
   is_engaged = params.get_bool("IsEngaged")
+  allow_sensitive = params.get_bool("SunnylinkAllowSensitiveWrite")
 
   for key, value in params_to_update.items():
-    # disallow modifications to blocked parameters
     if key in BLOCKED_PARAMS:
-      cloudlog.warning(f"sunnylinkd.saveParams.blocked: Attempted to modify blocked parameter '{key}'")
+      cloudlog.warning(f"sunnylinkd.saveParams.always_blocked: Attempted to modify '{key}'")
+      continue
+
+    # Block sensitive params unless toggle is enabled
+    if key in SENSITIVE_PARAMS and not allow_sensitive:
+      cloudlog.warning(f"sunnylinkd.saveParams.sensitive_blocked: Attempted to modify '{key}'")
       continue
 
     # Block all params while engaged
