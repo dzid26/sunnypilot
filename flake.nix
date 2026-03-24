@@ -1,0 +1,119 @@
+{
+  description = "sunnypilot/openpilot reproducible development environment";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+    flake-utils.url = "github:numtide/flake-utils";
+  };
+
+  outputs = { self, nixpkgs, flake-utils }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = import nixpkgs { inherit system; };
+
+        python = pkgs.python312;
+
+        # NO_VERIFY skips Ubuntu-only OS check so op.sh works on any distro
+        op = pkgs.writeShellScriptBin "op" ''
+          OPENPILOT_ROOT="''${OPENPILOT_ROOT:-$(pwd)}"
+          export NO_VERIFY=1
+          exec ${pkgs.bash}/bin/bash "$OPENPILOT_ROOT/tools/op.sh" "$@"
+        '';
+
+        runtimeLibs = with pkgs; [
+          stdenv.cc.cc.lib    # libstdc++ for Python C extensions
+          zlib                # numpy and other pip wheels
+          bzip2               # pip wheels
+          zstd                # pip wheels
+          libusb1             # python libusb1 (panda) — ctypes dlopen by name
+          portaudio           # sounddevice (micd, soundd)
+          llvmPackages_18.libllvm  # tinygrad ctypes
+          qt5.qtbase          # Qt + xcb plugin runtime (cabana has RPATH, PlotJuggler dlopens by name)
+          qt5.qtsvg           # PlotJuggler
+          qt5.qtx11extras     # PlotJuggler
+          libx11              # raylib GLFW (desktop UI)
+          libxrandr           # raylib GLFW
+          libxinerama         # raylib GLFW
+          libxcursor          # raylib GLFW
+          libxi               # raylib GLFW
+          libxcb              # PlotJuggler prebuilt binary
+          elfutils            # libdw (PlotJuggler prebuilt binary)
+        ];
+      in
+      {
+        devShells.default = pkgs.mkShell {
+          name = "openpilot";
+
+          # Nix gcc wrapper injects _FORTIFY_SOURCE which requires -O1+.
+          # Some test targets (libsafety) compile with -O0, causing errors.
+          hardeningDisable = [ "fortify" ];
+
+          nativeBuildInputs = with pkgs; [
+            bashInteractive  # https://github.com/NixOS/nix/issues/6982
+            gcc14
+            gnumake
+            cmake
+            pkg-config
+            qt5.qtbase.dev
+          ];
+
+          buildInputs = with pkgs; [
+            python
+            uv
+            git
+            git-lfs
+            qt5.qtbase
+            qt5.qtcharts
+            qt5.qtwayland
+            libglvnd.dev       # GL/gl.h headers
+            openssl
+            libusb1
+            libGL
+            zlib
+            bzip2
+            zstd
+            llvmPackages_18.libllvm
+            libva              # vendored ffmpeg VA-API (link-time)
+            libdrm
+            libx11
+            libxext
+            libxcb
+            op
+          ];
+
+          shellHook = ''
+            export OPENPILOT_ROOT="$(pwd)"
+
+            # vendored ffmpeg libavutil.a references VA-API/DRM symbols
+            export NIX_LDFLAGS="$NIX_LDFLAGS -lva -lva-drm -ldrm"
+
+            # point non-FHS nix libs at vendored binaries
+            export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath runtimeLibs}"
+
+            # tinygrad ctypes overrides (see tinygrad/runtime/support/c.py findlib)
+            export LLVM_PATH="${pkgs.llvmPackages_18.libllvm.lib}/lib/libLLVM.so"
+            export LIBC_PATH="${pkgs.glibc}/lib/libc.so.6"
+
+            export QT_QPA_PLATFORM_PLUGIN_PATH="${pkgs.qt5.qtbase.bin}/lib/qt-${pkgs.qt5.qtbase.version}/plugins/platforms"
+            export QT_PLUGIN_PATH="${pkgs.qt5.qtbase.bin}/lib/qt-${pkgs.qt5.qtbase.version}/plugins:${pkgs.qt5.qtwayland.bin}/lib/qt-${pkgs.qt5.qtbase.version}/plugins"
+
+            # First-time setup
+            if [ ! -f .venv/bin/activate ]; then
+              uv sync --frozen --all-extras
+              git submodule update --init --recursive --jobs 4
+              git lfs install && git lfs pull
+              "$OPENPILOT_ROOT/tools/op.sh" --no-verify post-commit
+
+              echo ""
+              echo "openpilot dev shell ready. Try it out:"
+              echo "  op build    Build openpilot"
+              echo "  op cabana   Launch Cabana"
+              echo "  op test     Run tests"
+              echo "  code .      Open VSCode with nix environment"
+              echo ""
+            fi
+            if [ -f .venv/bin/activate ]; then source .venv/bin/activate; fi
+          '';
+        };
+      });
+}

@@ -119,13 +119,12 @@ def _libflags(target, source, env, for_signature):
                     env['LIBPREFIXES'], env['LIBSUFFIXES'], env, env['LIBLITERALPREFIX'])
 
 env = Environment(
-  ENV={
-    "PATH": os.environ['PATH'],
+  ENV=dict(os.environ, **{
     "PYTHONPATH": os.pathsep.join(submodule_python_paths),
     "ACADOS_SOURCE_DIR": acados.DIR,
     "ACADOS_PYTHON_INTERFACE_PATH": acados.TEMPLATE_DIR,
     "TERA_PATH": acados.TERA_PATH
-  },
+  }),
   CCFLAGS=[
     "-g",
     "-fPIC",
