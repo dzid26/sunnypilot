@@ -3,7 +3,7 @@ from openpilot.common.realtime import DT_CTRL
 from openpilot.common.constants import CV
 
 
-CAMERA_OFFSET = 0.04
+CAMERA_OFFSET = 0.01
 LDW_MIN_SPEED = 31 * CV.MPH_TO_MS
 LANE_DEPARTURE_THRESHOLD = 0.1
 
