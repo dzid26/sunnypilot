@@ -9,7 +9,6 @@ from openpilot.common.params import Params
 from opendbc.car import structs
 from opendbc.safety import ALTERNATIVE_EXPERIENCE
 from opendbc.sunnypilot.car.hyundai.values import HyundaiFlagsSP, HyundaiSafetyFlagsSP
-from opendbc.sunnypilot.car.tesla.values import TeslaFlagsSP
 
 
 MADS_NO_ACC_MAIN_BUTTON = ("rivian", "tesla")
@@ -21,17 +20,15 @@ class MadsSteeringModeOnBrake:
   DISENGAGE = 2
 
 
-def get_mads_limited_brands(CP: structs.CarParams, CP_SP: structs.CarParamsSP) -> bool:
+def get_mads_limited_brands(CP: structs.CarParams, CP_SP: structs.CarParamsSP, params: Params) -> bool:
   if CP.brand == 'rivian':
     return True
-  if CP.brand == 'tesla':
-    return not CP_SP.flags & TeslaFlagsSP.HAS_VEHICLE_BUS
 
   return False
 
 
 def read_steering_mode_param(CP: structs.CarParams, CP_SP: structs.CarParamsSP, params: Params):
-  if get_mads_limited_brands(CP, CP_SP):
+  if get_mads_limited_brands(CP, CP_SP, params):
     return MadsSteeringModeOnBrake.DISENGAGE
 
   return params.get("MadsSteeringMode", return_default=True)
@@ -63,7 +60,7 @@ def set_car_specific_params(CP: structs.CarParams, CP_SP: structs.CarParamsSP, p
   # MADS is currently partially supported for these platforms due to lack of consistent states to engage controls
   # Only MadsSteeringModeOnBrake.DISENGAGE is supported for these platforms
   # TODO-SP: To enable MADS full support for Rivian and most Tesla, identify consistent signals for MADS toggling
-  mads_partial_support = get_mads_limited_brands(CP, CP_SP)
+  mads_partial_support = get_mads_limited_brands(CP, CP_SP, params)
   if mads_partial_support:
     params.put("MadsSteeringMode", 2, block=True)
     params.put_bool("MadsUnifiedEngagementMode", True, block=True)
@@ -71,3 +68,20 @@ def set_car_specific_params(CP: structs.CarParams, CP_SP: structs.CarParamsSP, p
   # no ACC MAIN button for these brands
   if CP.brand in MADS_NO_ACC_MAIN_BUTTON:
     params.remove("MadsMainCruiseAllowed")
+
+
+def detect_hold_and_tap(a: bool, b: bool, b_prev: bool, tap_pending: bool) -> tuple[bool, bool]:
+    b_rise = (not b_prev) and b
+    b_fall = b_prev and (not b)
+
+    if a and b_rise:
+        tap_pending = True
+
+    if not a:
+        tap_pending = False
+
+    if b_fall and tap_pending:
+            tap_pending = False
+            return True, tap_pending
+
+    return False, tap_pending

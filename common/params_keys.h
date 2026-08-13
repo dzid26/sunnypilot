@@ -210,8 +210,9 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"SunnylinkCache_Users", {PERSISTENT, STRING}},
     {"SunnylinkDongleId", {PERSISTENT, STRING}},
     {"SunnylinkdPid", {PERSISTENT, INT}},
-    {"SunnylinkEnabled", {PERSISTENT, BOOL, "1"}},
+    {"SunnylinkEnabled", {PERSISTENT, BOOL, "0"}},
     {"SunnylinkTempFault", {CLEAR_ON_MANAGER_START | CLEAR_ON_OFFROAD_TRANSITION, BOOL, "0"}},
+    {"SunnylinkAllowSensitiveWrite", {PERSISTENT, BOOL, "0"}},
 
     // Backup Manager params
     {"BackupManager_CreateBackup", {PERSISTENT, BOOL}},
@@ -222,6 +223,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"SubaruStopAndGo", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"SubaruStopAndGoManualParkingBrake", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"TeslaCoopSteering", {PERSISTENT | BACKUP, BOOL, "0"}},
+    {"TeslaMadsScreenButton", {PERSISTENT | BACKUP, INT, "1"}},
     {"ToyotaEnforceStockLongitudinal", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"ToyotaStopAndGoHack", {PERSISTENT | BACKUP, BOOL, "0"}},
 
