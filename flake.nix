@@ -94,6 +94,9 @@
             # point non-FHS nix libs at vendored binaries
             export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath runtimeLibs}"
 
+            # replay's vendored ncurses has a wrong compiled-in terminfo path
+            export TERMINFO_DIRS="${pkgs.ncurses}/share/terminfo:/usr/share/terminfo:/lib/terminfo:/usr/lib/terminfo"
+
             # tinygrad ctypes overrides (see tinygrad/runtime/support/c.py findlib)
             export LLVM_PATH="${pkgs.llvmPackages_18.libllvm.lib}/lib/libLLVM.so"
             export LIBC_PATH="${pkgs.glibc}/lib/libc.so.6"
