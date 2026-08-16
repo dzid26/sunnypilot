@@ -99,7 +99,10 @@ def login(method):
   web_server = ClientRedirectServer(('localhost', 0), ClientRedirectHandler)
   oauth_uri = auth_redirect_link(method, web_server.server_port)
   print(f'To sign in, use your browser and navigate to {oauth_uri}')
-  webbrowser.open(oauth_uri, new=2)
+  try:
+    webbrowser.open(oauth_uri, new=2)
+  except Exception as e:
+    print(f'Failed to open browser automatically ({e}); copy the URL above into your browser.', file=sys.stderr)
 
   while True:
     web_server.handle_request()
