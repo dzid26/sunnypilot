@@ -38,6 +38,8 @@
           libxi               # raylib GLFW
           libxcb              # PlotJuggler prebuilt binary
           elfutils            # libdw (PlotJuggler prebuilt binary)
+          libGL               # GLVND dispatcher (libGL.so.1) — raylib GLFW
+          mesa                # GLX vendor (libGLX_mesa) + D3D12 driver for WSL
         ];
       in
       {
@@ -62,13 +64,15 @@
             uv
             git
             git-lfs
+            tmux
             qt5.qtbase
             qt5.qtcharts
             qt5.qtwayland
             libglvnd.dev       # GL/gl.h headers
             openssl
             libusb1
-            libGL
+            libGL                 # GLVND dispatcher (libGL.so.1)
+            mesa                  # GLX vendor (libGLX_mesa) + D3D12 driver for WSL
             zlib
             bzip2
             zstd
