@@ -97,6 +97,12 @@
             # replay's vendored ncurses has a wrong compiled-in terminfo path
             export TERMINFO_DIRS="${pkgs.ncurses}/share/terminfo:/usr/share/terminfo:/lib/terminfo:/usr/lib/terminfo"
 
+            # use bundled fontconfig when the host lacks one
+            if [[ ! -f /etc/fonts/fonts.conf ]]; then
+              export FONTCONFIG_FILE="${pkgs.fontconfig.out}/etc/fonts/fonts.conf"
+              export FONTCONFIG_PATH="${pkgs.fontconfig.out}/etc/fonts"
+            fi
+
             # tinygrad ctypes overrides (see tinygrad/runtime/support/c.py findlib)
             export LLVM_PATH="${pkgs.llvmPackages_18.libllvm.lib}/lib/libLLVM.so"
             export LIBC_PATH="${pkgs.glibc}/lib/libc.so.6"
