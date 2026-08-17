@@ -88,6 +88,9 @@
           shellHook = ''
             export OPENPILOT_ROOT="$(pwd)"
 
+            # op checks fail on non-Ubuntu; NO_VERIFY keeps op usable
+            export NO_VERIFY=1
+
             # .python-version pins 3.12.13; make uv use the nix python instead of
             # trying (and failing) to download a managed one
             export UV_PYTHON="${python}/bin/python3"
@@ -114,21 +117,39 @@
             export QT_QPA_PLATFORM_PLUGIN_PATH="${pkgs.qt5.qtbase.bin}/lib/qt-${pkgs.qt5.qtbase.version}/plugins/platforms"
             export QT_PLUGIN_PATH="${pkgs.qt5.qtbase.bin}/lib/qt-${pkgs.qt5.qtbase.version}/plugins:${pkgs.qt5.qtwayland.bin}/lib/qt-${pkgs.qt5.qtbase.version}/plugins:${pkgs.qt5.qtsvg.bin}/lib/qt-${pkgs.qt5.qtsvg.version}/plugins"
 
-            # First-time setup
-            if [ ! -f .venv/bin/activate ]; then
-              uv sync --frozen --all-extras
+            # Submodules should be present before uv sync: pyproject path sources
+            # (pandacan, opendbc, msgq, ...) live in the submodule checkouts.
+            if git submodule status --recursive | grep -q '^-'; then
               git submodule update --init --recursive --jobs 4
-              git lfs install && git lfs pull
+            fi
+
+            # venv sync, only when lockfiles change
+            stamp=".venv/.nix-synced"
+            hash="$(sha256sum uv.lock pyproject.toml | sha256sum | cut -d' ' -f1)"
+            if [[ ! -f "$stamp" ]] || [[ "$(cat "$stamp")" != "$hash" ]]; then
+              uv sync --frozen --all-extras
+              mkdir -p .venv && echo "$hash" > "$stamp"
+            fi
+
+            # configure the LFS filter only on fresh checkouts (installed after first run)
+            git config --get filter.lfs.process >/dev/null 2>&1 || git lfs install
+            git lfs pull
+
+            # post-commit hook (linter on commit), only when missing
+            if [[ ! -f .git/hooks/post-commit ]]; then
               "$OPENPILOT_ROOT/tools/op.sh" --no-verify post-commit
 
-              echo ""
-              echo "openpilot dev shell ready. Try it out:"
-              echo "  op build    Build openpilot"
-              echo "  op cabana   Launch Cabana"
-              echo "  op test     Run tests"
-              echo "  code .      Open VSCode with nix environment"
-              echo ""
             fi
+
+
+            echo ""
+            echo "openpilot dev shell ready. Try it out:"
+            echo "  op build    Build openpilot"
+            echo "  op cabana   Launch Cabana"
+            echo "  op test     Run tests"
+            echo "  code .      Open VSCode with nix environment"
+            echo ""
+
             if [ -f .venv/bin/activate ]; then source .venv/bin/activate; fi
           '';
         };
