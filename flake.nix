@@ -1,3 +1,4 @@
+# first time: run tools/setup_nix.sh, then enter the dev shell with: nix develop
 {
   description = "sunnypilot/openpilot reproducible development environment";
 
