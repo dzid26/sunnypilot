@@ -88,6 +88,10 @@
           shellHook = ''
             export OPENPILOT_ROOT="$(pwd)"
 
+            # .python-version pins 3.12.13; make uv use the nix python instead of
+            # trying (and failing) to download a managed one
+            export UV_PYTHON="${python}/bin/python3"
+
             # vendored ffmpeg libavutil.a references VA-API/DRM symbols
             export NIX_LDFLAGS="$NIX_LDFLAGS -lva -lva-drm -ldrm"
 
