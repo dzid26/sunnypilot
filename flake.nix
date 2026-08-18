@@ -54,6 +54,7 @@
           nativeBuildInputs = with pkgs; [
             bashInteractive  # https://github.com/NixOS/nix/issues/6982
             gcc14
+            clang   # used by test_generated_header
             gnumake
             cmake
             pkg-config
@@ -148,7 +149,7 @@
             echo "  op build    Build openpilot"
             echo "  op cabana   Launch Cabana"
             echo "  op test     Run tests"
-            echo "  code .      Open VSCode with nix environment"
+            echo "  code .      Open VSCode from nix dev shell"
             echo ""
 
             if [ -f .venv/bin/activate ]; then source .venv/bin/activate; fi

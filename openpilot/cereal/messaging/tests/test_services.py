@@ -18,5 +18,5 @@ class TestServices(OpenpilotTestCase):
 
   def test_generated_header(self):
     with tempfile.NamedTemporaryFile(suffix=".h") as f:
-      ret = subprocess.run(f"python3 {services.__file__} > {f.name} && clang++ {f.name} -std=c++11", shell=True).returncode
+      ret = subprocess.run(f"python3 {services.__file__} > {f.name} && clang++ {f.name} -std=c++11 -fsyntax-only", shell=True).returncode
       assert ret == 0, "generated services header is not valid C"
