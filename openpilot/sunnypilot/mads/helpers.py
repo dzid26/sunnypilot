@@ -9,7 +9,6 @@ from openpilot.common.params import Params
 from opendbc.car import structs
 from opendbc.safety import ALTERNATIVE_EXPERIENCE
 from opendbc.sunnypilot.car.hyundai.values import HyundaiFlagsSP, HyundaiSafetyFlagsSP
-from opendbc.sunnypilot.car.tesla.values import MadsScreenButtonType, TeslaFlagsSP
 
 
 MADS_NO_ACC_MAIN_BUTTON = ("rivian", "tesla")
@@ -24,11 +23,6 @@ class MadsSteeringModeOnBrake:
 def get_mads_limited_brands(CP: structs.CarParams, CP_SP: structs.CarParamsSP, params: Params) -> bool:
   if CP.brand == 'rivian':
     return True
-  if CP.brand == 'tesla':
-    if not CP_SP.flags & TeslaFlagsSP.HAS_VEHICLE_BUS:
-      return True
-    screen_button = int(params.get("TeslaMadsScreenButton", return_default=True))
-    return screen_button == MadsScreenButtonType.OFF
 
   return False
 
@@ -74,3 +68,20 @@ def set_car_specific_params(CP: structs.CarParams, CP_SP: structs.CarParamsSP, p
   # no ACC MAIN button for these brands
   if CP.brand in MADS_NO_ACC_MAIN_BUTTON:
     params.remove("MadsMainCruiseAllowed")
+
+
+def detect_hold_and_tap(a: bool, b: bool, b_prev: bool, tap_pending: bool) -> tuple[bool, bool]:
+    b_rise = (not b_prev) and b
+    b_fall = b_prev and (not b)
+
+    if a and b_rise:
+        tap_pending = True
+
+    if not a:
+        tap_pending = False
+
+    if b_fall and tap_pending:
+            tap_pending = False
+            return True, tap_pending
+
+    return False, tap_pending

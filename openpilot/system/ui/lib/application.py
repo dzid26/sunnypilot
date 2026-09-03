@@ -180,6 +180,9 @@ class MouseState:
       mouse_pos = rl.get_touch_position(slot)
       x = mouse_pos.x / self._scale if self._scale != 1.0 else mouse_pos.x
       y = mouse_pos.y / self._scale if self._scale != 1.0 else mouse_pos.y
+      if gui_app.screen_rotation_180:
+        x = gui_app.width - x
+        y = gui_app.height - y
       ev = MouseEvent(
         MousePos(x, y),
         slot,
@@ -235,6 +238,7 @@ class GuiApplication(GuiApplicationExt):
     self._last_mouse_event: MouseEvent = MouseEvent(MousePos(0, 0), 0, False, False, False, 0.0)
 
     self._should_render = True
+    self._screen_rotation_180 = False
 
     # Debug variables
     self._mouse_history: deque[MousePosWithTime] = deque(maxlen=MOUSE_THREAD_RATE)
@@ -456,6 +460,14 @@ class GuiApplication(GuiApplicationExt):
   def set_should_render(self, should_render: bool):
     self._should_render = should_render
 
+  @property
+  def screen_rotation_180(self) -> bool:
+    return self._screen_rotation_180
+
+  @screen_rotation_180.setter
+  def screen_rotation_180(self, rotated: bool):
+    self._screen_rotation_180 = bool(rotated)
+
   def texture(self, asset_path: str, width: int | None = None, height: int | None = None,
               alpha_premultiply=False, keep_aspect_ratio=True, flip_x: bool = False) -> rl.Texture:
     if width is not None:
@@ -610,6 +622,11 @@ class GuiApplication(GuiApplicationExt):
           yield False, 0.0, 0.0
           continue
 
+        # need to create texture for screen rotation if does't already exist
+        if self._screen_rotation_180 and self._render_texture is None:
+          self._render_texture = rl.load_render_texture(self._scaled_width, self._scaled_height)
+          rl.set_texture_filter(self._render_texture.texture, rl.TextureFilter.TEXTURE_FILTER_POINT)
+
         if self._render_texture:
           rl.begin_texture_mode(self._render_texture)
           rl.clear_background(rl.BLACK)
@@ -629,6 +646,15 @@ class GuiApplication(GuiApplicationExt):
         for widget in self._nav_stack[-self._nav_stack_widgets_to_render:]:
           widget.render(rl.Rectangle(0, 0, self.width, self.height))
 
+        if self._show_fps:
+          rl.draw_fps(10, 10)
+
+        if self._show_mouse_coords:
+          self._draw_mouse_coordinates(gui_app.font(FontWeight.SEMI_BOLD))
+
+        if self._grid_size > 0:
+          self._draw_grid()
+
         frame_time = rl.get_frame_time()
         cpu_time = time.monotonic() - frame_start
         yield True, frame_time, cpu_time
@@ -640,28 +666,23 @@ class GuiApplication(GuiApplicationExt):
           rl.end_texture_mode()
           rl.begin_drawing()
           rl.clear_background(rl.BLACK)
-          src_rect = rl.Rectangle(0, 0, float(self._scaled_width), -float(self._scaled_height))
-          dst_rect = rl.Rectangle(0, 0, float(self._scaled_width), float(self._scaled_height))
           texture = self._render_texture.texture
           if texture:
+            cx = float(self._scaled_width) / 2
+            cy = float(self._scaled_height) / 2
+            src_rect = rl.Rectangle(0, 0, float(self._scaled_width), -float(self._scaled_height))
+            dst_rect = rl.Rectangle(cx, cy, float(self._scaled_width), float(self._scaled_height))
+            origin = rl.Vector2(cx, cy)
+            rotation = 180.0 if self._screen_rotation_180 else 0.0
             if BURN_IN_MODE and self._burn_in_shader:
               rl.begin_shader_mode(self._burn_in_shader)
-              rl.draw_texture_pro(texture, src_rect, dst_rect, rl.Vector2(0, 0), 0.0, rl.WHITE)
+              rl.draw_texture_pro(texture, src_rect, dst_rect, origin, rotation, rl.WHITE)
               rl.end_shader_mode()
             else:
-              rl.draw_texture_pro(texture, src_rect, dst_rect, rl.Vector2(0, 0), 0.0, rl.WHITE)
-
-        if self._show_fps:
-          rl.draw_fps(10, 10)
+              rl.draw_texture_pro(texture, src_rect, dst_rect, origin, rotation, rl.WHITE)
 
         if self._show_touches:
           self._draw_touch_points()
-
-        if self._show_mouse_coords:
-          self._draw_mouse_coordinates(gui_app.font(FontWeight.SEMI_BOLD))
-
-        if self._grid_size > 0:
-          self._draw_grid()
 
         rl.end_drawing()
 
@@ -799,7 +820,12 @@ class GuiApplication(GuiApplicationExt):
     for mouse_event in self._mouse_events:
       if mouse_event.left_pressed:
         self._mouse_history.clear()
-      self._mouse_history.append(MousePosWithTime(mouse_event.pos.x * self._scale, mouse_event.pos.y * self._scale, current_time))
+      x = mouse_event.pos.x
+      y = mouse_event.pos.y
+      if gui_app.screen_rotation_180:
+        x = gui_app.width - x
+        y = gui_app.height - y
+      self._mouse_history.append(MousePosWithTime(x * self._scale, y * self._scale, current_time))
 
     # Remove old touch points that exceed the timeout
     while self._mouse_history and (current_time - self._mouse_history[0].t) > TOUCH_HISTORY_TIMEOUT:

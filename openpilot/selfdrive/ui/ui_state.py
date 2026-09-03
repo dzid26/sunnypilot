@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import time
 import threading
@@ -11,12 +12,16 @@ from openpilot.common.realtime import drop_realtime
 from openpilot.common.swaglog import cloudlog
 from openpilot.selfdrive.ui.lib.prime_state import PrimeState
 from openpilot.system.ui.lib.application import gui_app
+from openpilot.common.constants import ACCELERATION_DUE_TO_GRAVITY
 from openpilot.common.hardware import HARDWARE, PC
 
 from openpilot.selfdrive.ui.sunnypilot.ui_state import UIStateSP, DeviceSP
 
 BACKLIGHT_OFFROAD = 65 if HARDWARE.get_device_type() == "mici" else 50
 PARAM_UPDATE_TIME = 1 / 5.0
+
+SCREEN_ROTATION_DEADZONE_DEG = 10
+SCREEN_ROTATION_DEBOUNCE = 0.2
 
 
 class UIStatus(Enum):
@@ -46,6 +51,7 @@ class UIState(UIStateSP):
         "onroadEvents",
         "liveCalibration",
         "radarState",
+        "accelerometer",
         "deviceState",
         "pandaStates",
         "carParams",
@@ -92,6 +98,11 @@ class UIState(UIStateSP):
     self.CP: car.CarParams | None = None
     self.light_sensor: float = -1.0
 
+    self._screen_rotation_180: bool = False
+    self._screen_rotation_pending: bool | None = None
+    self._pending_since: float = 0.0
+
+
     self._params_thread: threading.Thread | None = None
 
     # Callbacks
@@ -127,8 +138,56 @@ class UIState(UIStateSP):
     self.sm.update(0)
     self._update_state()
     self._update_status()
+    self._update_screen_rotation()
     device.update()
     UIStateSP.update(self)
+
+  @property
+  def screen_rotation_180(self) -> bool:
+    return self._screen_rotation_180
+
+  def _update_screen_rotation(self) -> None:
+    if self.started:
+      return
+
+    if self.sm.alive["pandaStates"] and len(self.sm["pandaStates"]) > 0:
+      # only rotate when powered from USB e.g. at the desk - don't give user
+      # the expectation the device can be installed up side down in the car
+      if self.sm["pandaStates"][0].voltage > 6000:
+        return
+
+    accel = self.sm["accelerometer"].acceleration.v
+    if accel is None or len(accel) < 3:
+      return
+
+    ax = float(accel[0])
+    ay = float(accel[1])
+    az = float(accel[2])
+    accel_mag = math.sqrt(ax * ax + ay * ay + az * az)
+    if accel_mag < ACCELERATION_DUE_TO_GRAVITY / 2:
+      self._screen_rotation_pending = None
+      return
+
+    tilt = math.degrees(math.acos(abs(ax) / accel_mag))
+    if tilt > 90 - SCREEN_ROTATION_DEADZONE_DEG:
+      self._screen_rotation_pending = None
+      return
+
+    desired = ax < 0.0
+    if desired == self._screen_rotation_180:
+      self._screen_rotation_pending = None
+      return
+
+    now = time.monotonic()
+    if self._screen_rotation_pending != desired:
+      self._screen_rotation_pending = desired
+      self._pending_since = now
+      return
+
+    if now - self._pending_since >= SCREEN_ROTATION_DEBOUNCE:
+      self._screen_rotation_180 = desired
+      self._screen_rotation_pending = None
+
 
   def _params_refresh_worker(self):
     drop_realtime()
