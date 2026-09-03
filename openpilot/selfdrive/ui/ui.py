@@ -11,6 +11,7 @@ from openpilot.selfdrive.ui.mici.layouts.main import MiciMainLayout
 from openpilot.selfdrive.ui.ui_state import ui_state
 
 BIG_UI = gui_app.big_ui()
+FLIP_SCREEN = os.getenv("FLIP", "0") == "1"
 
 
 def main():
@@ -36,6 +37,8 @@ def main():
           set_core_affinity(list(cores))
         except OSError:
           pass
+
+      gui_app.screen_rotation_180 = FLIP_SCREEN or ui_state.screen_rotation_180
 
       extra_cpu = time.monotonic() - extra_start
       msg = messaging.new_message('uiDebug')
