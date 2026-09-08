@@ -173,7 +173,7 @@ class UIState(UIStateSP):
     if self.sm.alive["pandaStates"] and len(self.sm["pandaStates"]) > 0:
       # only rotate when powered from USB e.g. at the desk - don't give user
       # the expectation the device can be installed up side down in the car
-      if self.sm["pandaStates"][0].voltage > 6000:
+      if self.sm["pandaStates"][0].harnessStatus != log.PandaState.HarnessStatus.notConnected:
         return
 
     accel = self.sm["accelerometer"].acceleration.v
