@@ -35,12 +35,13 @@ def get_max_accel(v_ego):
 def get_coast_accel(pitch):
   return np.sin(pitch) * -5.65 - 0.3  # fitted from data using xx/projects/allow_throttle/compute_coast_accel.py
 
-def get_cruise_accel(e2e, v_cruise, v_ego, a_cruise_prev, angle_steers, CP, dt, accel_coast, allow_throttle):
+def get_cruise_accel(e2e, v_cruise, v_ego, a_cruise_prev, curvature, dt, accel_coast, allow_throttle):
   max_accel = ACCEL_MAX if e2e else get_max_accel(v_ego)
 
   if not e2e:
+    # TODO The lookup table for turns should be verified
     a_total_max = np.interp(v_ego, _A_TOTAL_MAX_BP, _A_TOTAL_MAX_V)
-    a_y = v_ego ** 2 * angle_steers * CV.DEG_TO_RAD / (CP.steerRatio * CP.wheelbase)
+    a_y = v_ego ** 2 * abs(curvature)
     a_x_allowed = math.sqrt(max(a_total_max ** 2 - a_y ** 2, 0.))
     max_accel = min(max_accel, a_x_allowed)
     if not allow_throttle:
@@ -99,7 +100,7 @@ class LongitudinalPlanner(LongitudinalPlannerSP):
     throttle_prob = throttle_probs[1] if len(throttle_probs) > 1 else 1.0
     self.allow_throttle = throttle_prob > ALLOW_THROTTLE_THRESHOLD or v_ego <= MIN_ALLOW_THROTTLE_SPEED
 
-    steer_angle_without_offset = sm['carState'].steeringAngleDeg - sm['vehicleParameters'].angleOffsetDeg
+    current_curvature = sm['controlsState'].curvature
 
     if reset_state:
       self.v_desired_filter.x = v_ego
@@ -141,7 +142,7 @@ class LongitudinalPlanner(LongitudinalPlannerSP):
     is_e2e = self.is_e2e(sm)
 
     self.a_cruise = get_cruise_accel(is_e2e, v_cruise, v_ego,
-                                     self.a_cruise, steer_angle_without_offset, self.CP, self.dt,
+                                     self.a_cruise, current_curvature, self.dt,
                                      accel_coast, self.allow_throttle)
     cruise_should_stop = should_stop(v_ego, self.a_cruise)
 
