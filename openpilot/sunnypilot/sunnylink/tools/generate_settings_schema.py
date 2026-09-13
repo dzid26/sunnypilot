@@ -177,6 +177,50 @@ def collect_capability_refs(schema: dict) -> set[str]:
   return refs
 
 
+# Remote-write policy: single source of truth for sunnylinkd.saveParams.
+# - allowed = schema item keys (+ rule-referenced param keys) minus blocked:true
+# - engaged-blocked = allowed keys whose enablement contains not_engaged/offroad_only
+ENGAGED_GATE_TYPES = frozenset({"not_engaged", "offroad_only"})
+
+
+def rule_blocks_engaged(rule: dict) -> bool:
+  """True if a rule (or any nested condition) gates on engaged state."""
+  rule_type = rule.get("type")
+  if rule_type in ENGAGED_GATE_TYPES:
+    return True
+  if rule_type == "not" and isinstance(rule.get("condition"), dict):
+    return rule_blocks_engaged(rule["condition"])
+  if rule_type in ("any", "all") and isinstance(rule.get("conditions"), list):
+    return any(rule_blocks_engaged(c) for c in rule["conditions"] if isinstance(c, dict))
+  return False
+
+
+def collect_remote_policy(schema: dict) -> tuple[set[str], set[str]]:
+  """Derive (allowed, engaged_blocked) remote-write sets from the schema."""
+  allowed: set[str] = set()
+  engaged: set[str] = set()
+  blocked_keys: set[str] = set()
+
+  def _visit_rule(rule: dict) -> None:
+    if rule.get("type") in ("param", "param_compare") and isinstance(rule.get("key"), str):
+      allowed.add(rule["key"])
+
+  def _visit_item(item: dict) -> None:
+    key = item.get("key")
+    if isinstance(key, str):
+      if item.get("blocked") is True:
+        blocked_keys.add(key)
+      else:
+        allowed.add(key)
+        _walk_rules(item.get("visibility"), _visit_rule)
+        _walk_rules(item.get("enablement"), _visit_rule)
+        if any(isinstance(r, dict) and rule_blocks_engaged(r) for r in (item.get("enablement") or [])):
+          engaged.add(key)
+
+  _walk_all_items(schema, _visit_item)
+  return allowed - blocked_keys, engaged - blocked_keys
+
+
 if __name__ == "__main__":
   # CLI: print schema for inspection
   schema = generate_schema()
