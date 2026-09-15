@@ -88,8 +88,6 @@ else:
         float gray = dot(rgb, vec3(0.299, 0.587, 0.114));
         rgb = mix(vec3(gray), rgb, 0.2);  // 20% saturation
         rgb = clamp((rgb - 0.5) * 1.2 + 0.5, 0.0, 1.0);  // +20% contrast
-      } else {
-        rgb *= 0.85;  // 85% opacity
       }
       // TODO: the images out of camerad need some more correction and
       // the ui should apply a gamma curve for the device display

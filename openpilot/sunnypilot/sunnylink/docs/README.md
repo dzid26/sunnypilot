@@ -9,7 +9,7 @@
 | `settings_ui_src/pages/<page>.yaml` | One YAML per page (panel). Contains panel metadata + sections + items + sub_panels inline. | Adding/changing/removing a setting. |
 | `settings_ui_src/pages/vehicle.yaml` | Per-brand settings page (`kind: vehicle`). Each brand is a section. | Adding/changing a vehicle-specific setting. |
 | `settings_ui_src/_macros.yaml` | Named rule fragments referenced via `{$ref: "#/macros/<name>"}`. | Adding a reusable rule (e.g. a new platform gate). |
-| **`settings_ui.json`** | **Generated from src tree by `compile_settings_ui.py`. Do not edit by hand.** | Never. Compiler emits it; frontend reads it. |
+| **`settings_ui.json`** | **Generated from src tree by `compile_settings_ui.py`. Do not edit by hand.** | Never. Compiler emits it; the frontend renders from it and the on-device backend (`sunnylinkd.saveParams`) enforces remote writes from it (see Remote-write enforcement below). |
 
 Pages today: `steering, cruise, display, visuals, toggles, device, software, developer, models, vehicle` (10).
 
@@ -132,8 +132,8 @@ The tables below describe the **compiled** `settings_ui.json` schema — what th
 | `min`, `max`, `step` | For sliders | Numeric range constraints |
 | `unit` | No | Unit label. Static: `"seconds"`. Dynamic: `{"metric": "km/h", "imperial": "mph"}` (resolved by IsMetric) |
 | `visibility` | No | Rules for show/hide. Settings are never hidden, always dimmed with UNAVAILABLE badge when rules fail |
-| `enablement` | No | Rules for enabled/disabled (all must pass). Dimmed with badge when rules fail |
-| `blocked` | No | `true` for device-only settings that cannot be modified remotely. Frontend shows as read-only |
+| `enablement` | No | Rules for enabled/disabled (all must pass). Dimmed with badge when rules fail; device also rejects writes |
+| `blocked` | No | `true` for device-only settings that cannot be modified remotely. Frontend shows as read-only; device also rejects writes |
 | `title_param_suffix` | No | Dynamic title suffix. Example: `{"param": "IsMetric", "values": {"0": "mph", "1": "km/h"}}` |
 | `sub_items` | No | Nested child items |
 | `needs_onroad_cycle` | No | `true` if changing this param triggers a system restart. Frontend shows a "Restart" badge. See [REFERENCE.md - Remote Onroad Cycle](REFERENCE.md#remote-onroad-cycle) |
@@ -583,3 +583,7 @@ Example constraints in `_enforce_constraints()`:
 - No CarParams: remove all car-dependent params
 - No longitudinal: remove `ExperimentalMode`
 - No ICBM: remove `IntelligentCruiseButtonManagement`
+
+### Remote-write on-device enforcement
+
+The on-device backend (`sunnylinkd.saveParams`) derives its policy from this schema (`collect_remote_policy` in `tools/generate_settings_schema.py`): writable = in-schema and not `blocked: true`; while engaged, keys gated by `not_engaged`/`offroad_only` are rejected. Keys absent from the schema are never remotely writable, and an unreadable schema denies all remote writes. Adding/removing a YAML item or its gates changes what remote clients may write — no backend list to update.

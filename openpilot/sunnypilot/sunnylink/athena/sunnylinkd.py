@@ -33,7 +33,7 @@ from openpilot.sunnypilot.selfdrive.car.sync_sunnylink_params import update_car_
 from openpilot.sunnypilot.sunnylink.api import SunnylinkApi
 from openpilot.sunnypilot.sunnylink.utils import sunnylink_need_register, sunnylink_ready, get_param_as_byte, save_param_from_base64_encoded_string
 from openpilot.sunnypilot.sunnylink.capabilities import generate_capabilities, CAPABILITY_LABELS
-from openpilot.sunnypilot.sunnylink.tools.generate_settings_schema import generate_schema
+from openpilot.sunnypilot.sunnylink.tools.generate_settings_schema import generate_schema, DEFINITION_PATH, collect_remote_policy
 
 SUNNYLINK_ATHENA_HOST = os.getenv('SUNNYLINK_ATHENA_HOST', 'wss://athena.sunnylink.ai')
 HANDLER_THREADS = int(os.getenv('HANDLER_THREADS', "4"))
@@ -44,18 +44,29 @@ DISALLOW_LOG_UPLOAD = threading.Event()
 
 params = Params()
 
-# Parameters that should never be remotely modified
-BLOCKED_PARAMS = {
-  "AdbEnabled",
-  "CompletedSunnylinkConsentVersion",
-  "CompletedTrainingVersion",
-  "GithubUsername",  # Could grant SSH access
-  "GithubSshKeys",   # Direct SSH key injection
-  "HasAcceptedTerms",
-  "HasAcceptedTermsSP",
-  "OnroadCycleRequested",      # Prevent remote cycle trigger
-  "ParamsVersion",         # Device-managed version counter
-}
+# Remote-write policy is derived from settings_ui.json (single source of truth,
+# see collect_remote_policy in tools/generate_settings_schema.py):
+# - allowed = schema item keys (+ rule-referenced param keys) minus blocked:true
+# - engaged-blocked = allowed keys whose enablement contains not_engaged/offroad_only
+# Anything not in the schema or marked blocked:true is never remotely writable.
+# None = schema unreadable -> fail closed (deny all remote writes).
+def _load_remote_policy() -> tuple[frozenset[str], frozenset[str]] | None:
+  try:
+    with open(DEFINITION_PATH) as f:
+      schema = json.load(f)
+    allowed, engaged = collect_remote_policy(schema)
+    return frozenset(allowed), frozenset(engaged)
+  except Exception:
+    cloudlog.exception("sunnylinkd.remote_policy.schema_load_failed")
+    return None
+
+
+_policy = _load_remote_policy()
+if _policy is None:
+  ALLOWED_REMOTE: frozenset[str] | None = None
+  ENGAGED_BLOCKED: frozenset[str] | None = None
+else:
+  ALLOWED_REMOTE, ENGAGED_BLOCKED = _policy
 
 
 def handle_long_poll(ws: WebSocket, exit_event: threading.Event | None) -> None:
@@ -235,10 +246,17 @@ def getParams(params_keys: list[str], compression: bool = False) -> str | dict[s
 
 @dispatcher.add_method
 def saveParams(params_to_update: dict[str, str], compression: bool = False) -> None:
+  is_engaged = params.get_bool("IsEngaged")
+
   for key, value in params_to_update.items():
-    # disallow modifications to blocked parameters
-    if key in BLOCKED_PARAMS:
+    # allowlist: not in schema or blocked:true -> never remotely writable
+    if ALLOWED_REMOTE is None or key not in ALLOWED_REMOTE:
       cloudlog.warning(f"sunnylinkd.saveParams.blocked: Attempted to modify blocked parameter '{key}'")
+      continue
+
+    # Block critical params while engaged (schema not_engaged/offroad_only)
+    if is_engaged and (ENGAGED_BLOCKED is None or key in ENGAGED_BLOCKED):
+      cloudlog.warning(f"sunnylinkd.saveParams.blocked_engaged: Attempted to modify '{key}' while engaged")
       continue
 
     try:
