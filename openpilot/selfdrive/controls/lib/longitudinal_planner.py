@@ -20,7 +20,8 @@ from openpilot.sunnypilot.selfdrive.controls.lib.longitudinal_planner import Lon
 
 J_CRUISE_VALS = [1.6, 1.2, 0.8, 0.6]
 J_CRUISE_BP = [0., 10.0, 25., 40.]
-A_CRUISE_MIN = -0.5
+A_CRUISE_MIN = -1.2
+A_CRUISE_T = 2 # target acceleration time horizon
 CONTROL_N_T_IDX = ModelConstants.T_IDXS[:CONTROL_N]
 
 # Lookup table for turns
@@ -35,7 +36,7 @@ def get_cruise_accel(v_cruise, v_ego, a_cruise_prev, curvature, dt):
   a_x_allowed = math.sqrt(max(a_total_max ** 2 - a_y ** 2, 0.))
   max_accel = min(ACCEL_MAX, a_x_allowed)
 
-  target_accel = np.clip(v_cruise - v_ego, A_CRUISE_MIN, max_accel)
+  target_accel = np.clip((v_cruise - v_ego) / A_CRUISE_T, A_CRUISE_MIN, max_accel)
   j_cruise = np.interp(v_ego, J_CRUISE_BP, J_CRUISE_VALS)
   target_accel = float(np.clip(target_accel, a_cruise_prev - j_cruise * dt, a_cruise_prev + j_cruise * dt))
 
