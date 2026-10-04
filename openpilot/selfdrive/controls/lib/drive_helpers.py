@@ -2,7 +2,7 @@ import numpy as np
 from openpilot.common.constants import ACCELERATION_DUE_TO_GRAVITY
 from openpilot.common.realtime import DT_CTRL, DT_MDL
 
-MIN_SPEED = 1.0
+MIN_SPEED = 0.3
 CONTROL_N = 17
 # This is a turn radius smaller than most cars can achieve
 MAX_CURVATURE = 0.2
