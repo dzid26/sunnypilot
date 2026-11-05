@@ -1,9 +1,9 @@
 [submodule "panda"]
   path = panda
-  url = https://github.com/sunnyhaibin/panda.git
+  url = ../panda.git
 [submodule "opendbc"]
   path = opendbc_repo
-  url = https://github.com/sunnypilot/opendbc.git
+  url = ../opendbc.git
 [submodule "msgq"]
   path = msgq_repo
   url = https://github.com/sunnypilot/msgq.git
@@ -15,7 +15,7 @@
   url = https://github.com/commaai/teleoprtc
 [submodule "tinygrad"]
   path = tinygrad_repo
-  url = https://github.com/sunnypilot/tinygrad.git
+  url = https://github.com/dzid26/tinygrad.git
 [submodule "sunnypilot/neural_network_data"]
 	path = openpilot/sunnypilot/neural_network_data
   url = https://github.com/sunnypilot/neural-network-data.git
