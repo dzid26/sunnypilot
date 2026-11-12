@@ -98,8 +98,12 @@ class SidebarSP:
       opacity = 0.35 + 0.65 * (0.5 - 0.5 * math.cos(rl.get_time() * 6.0))
     elif state in (ChestnutState.UNCOMPILED, ChestnutState.FAILED):
       icon, opacity = self._chestnut_orange_img, 1.0
-    else:
+    elif state == ChestnutState.READY:
+      icon, opacity = self._chestnut_default_img, 1.0
+    elif state == ChestnutState.ACTIVE:
       icon, opacity = self._chestnut_green_img, 1.0
+    else:
+      return default_img, default_pos, 1.0
 
     x = HOME_BTN.x + (HOME_BTN.width - icon.width) / 2
     y = HOME_BTN.y + (HOME_BTN.height - icon.height) / 2
