@@ -12,7 +12,7 @@ from openpilot.cereal import custom
 from openpilot.selfdrive.ui.mici.widgets.dialog import BigConfirmationDialog, BigDialog
 from openpilot.sunnypilot.models.helpers import ACTIVE_BUNDLE_KEYS, get_selected_bundle
 from openpilot.selfdrive.ui.mici.widgets.button import BigButton, BigParamControl
-from openpilot.selfdrive.ui.ui_state import ui_state, device
+from openpilot.selfdrive.ui.ui_state import ui_state, device, ChestnutState
 from openpilot.selfdrive.ui.sunnypilot.model_info import (active_source, big_model_state, bundles_for_source, carrying_model,
                                                            default_model_name, model_cache_size_mb, model_info, queued_name,
                                                            refresh_in_progress, refresh_model_list)
@@ -51,7 +51,7 @@ class CurrentModelInfo(Widget):
     subheader_color = rl.Color(255, 255, 255, int(255 * 0.9 * 0.65))
     max_width = int(self._rect.width - 20)
     active_text, info_header, info_text = _model_info()
-    self.current_model_header = UnifiedLabel(tr("active model"), 48, max_width=max_width, text_color=header_color, font_weight=FontWeight.DISPLAY)
+    self.current_model_header = UnifiedLabel(tr("ready"), 48, max_width=max_width, text_color=header_color, font_weight=FontWeight.DISPLAY)
     self.current_model_text = UnifiedLabel(active_text, 32, max_width=max_width, text_color=subheader_color, font_weight=FontWeight.ROMAN, scroll=True)
 
     self.info_header = UnifiedLabel(info_header, 48, max_width=max_width, text_color=header_color, font_weight=FontWeight.DISPLAY)
@@ -260,7 +260,13 @@ class ModelsLayoutMici(NavScroller):
     self.refresh_btn.set_enabled(ui_state.is_offroad() and not is_downloading and not refreshing)
     self.refresh_btn.set_value(tr("fetching...") if refreshing else "")
 
-    self.current_model_info.current_model_header.set_text(tr("active model"))
+    if not ui_state.started:
+      header_text = tr("ready")
+    elif active_source() == "chestnut":
+      header_text = tr("active model") if ui_state.chestnut_state == ChestnutState.ACTIVE else tr("ready")
+    else:
+      header_text = tr("active model")
+    self.current_model_info.current_model_header.set_text(header_text)
     active_text, info_header, info_text = _model_info()
     self.current_model_info.current_model_text.set_text(active_text)
     self.current_model_info.info_header.set_text(info_header)
