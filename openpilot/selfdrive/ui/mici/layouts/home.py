@@ -130,6 +130,7 @@ class MiciHomeLayout(Widget):
 
     self._usb_icon = IconWidget("icons_mici/usb.png", (62, 40))
     self._chestnut_icon = IconWidget("icons_mici/chestnut_green.png", (54, 40))
+    self._chestnut_ready_icon = IconWidget("icons_mici/chestnut.png", (54, 40))
     self._chestnut_loading_icon = IconWidget("icons_mici/chestnut.png", (68, 40))
     self._chestnut_failed_icon = IconWidget("icons_mici/chestnut_orange.png", (68, 40))
     self._mic_icon = IconWidget("icons_mici/microphone.png", (32, 46))
@@ -142,6 +143,7 @@ class MiciHomeLayout(Widget):
       NetworkIcon(),
       self._usb_icon,
       self._chestnut_icon,
+      self._chestnut_ready_icon,
       self._chestnut_loading_icon,
       self._chestnut_failed_icon,
       self._body_icon,
@@ -227,9 +229,8 @@ class MiciHomeLayout(Widget):
       self._set_chestnut_visibility()
     else:
       self._usb_icon.set_visible(usb_connected and usb_unknown)
-      self._chestnut_icon.set_visible(not usb_unknown and chestnut_state not in
-                                      (ChestnutState.LOADING, ChestnutState.UNCOMPILED, ChestnutState.FAILED) and
-                                      (usb_connected or chestnut_state in (ChestnutState.READY, ChestnutState.ACTIVE)))
+      self._chestnut_icon.set_visible(not usb_unknown and chestnut_state == ChestnutState.ACTIVE)
+      self._chestnut_ready_icon.set_visible(not usb_unknown and chestnut_state == ChestnutState.READY)
       self._chestnut_loading_icon.set_visible(not usb_unknown and chestnut_state == ChestnutState.LOADING)
       self._chestnut_loading_icon.set_opacity(0.35 + 0.65 * (0.5 - 0.5 * math.cos(rl.get_time() * 6.0)))
       self._chestnut_failed_icon.set_visible(not usb_unknown and chestnut_state in (ChestnutState.UNCOMPILED, ChestnutState.FAILED))
