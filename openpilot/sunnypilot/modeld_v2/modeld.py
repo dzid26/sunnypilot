@@ -112,6 +112,11 @@ class ModelState(ModelStateBase):
 
   def _init_combined(self, pkl_path, cam_w, cam_h, bundle):
     cloudlog.warning(f"loading combined pkl: {pkl_path}")
+    if self.chestnut:
+      # the SMU clock mode is chosen from these at device init and is never published, so record it: it is the only way
+      # to tell from a route log which perf level the eGPU was running (auto ~2.1 GHz, boost ~3.0, high ~3.3).
+      perf = {k: os.environ.get(k, '') for k in ('AM_POWER_LIMIT', 'AM_PERF_LEVEL')}
+      cloudlog.info(f"chestnut: {perf}")
     jits = load_model(pkl_path, extend=fused_with_warp(cam_w, cam_h, self.chestnut))
 
     metadata = jits['metadata']
