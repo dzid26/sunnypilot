@@ -15,6 +15,7 @@ from openpilot.system import micd
 from openpilot.common.hardware import HARDWARE
 
 from openpilot.sunnypilot.selfdrive.ui.quiet_mode import QuietMode
+from openpilot.system.hardware.chestnut.status import CHESTNUT_POWERED_VOLTAGE, CHESTNUT_POWER_LOW_DELAY
 
 SAMPLE_RATE = 48000
 SAMPLE_BUFFER = 4096 # (approx 100ms)
@@ -85,6 +86,9 @@ class Soundd(QuietMode):
 
     self.selfdrive_timeout_alert = False
     self.pending_stop = False
+
+    self.chestnut_power_low = False
+    self.chestnut_low_since: float | None = None
 
     self.spl_filter_weighted = FirstOrderFilter(0, 2.5, FILTER_DT, initialized=False)
 
@@ -164,6 +168,23 @@ class Soundd(QuietMode):
       self.update_alert(AudibleAlert.none)
       self.selfdrive_timeout_alert = False
 
+  def check_chestnut_power(self, sm):
+    # a missing message means the eGPU stopped enumerating, which is not a supply fault
+    state = sm['chestnutState']
+    low = sm.alive['chestnutState'] and (state.supplyFault or state.supplyVoltage < CHESTNUT_POWERED_VOLTAGE)
+
+    if not low:
+      self.chestnut_low_since = None
+      self.chestnut_power_low = False
+      return
+
+    now = time.monotonic()
+    if self.chestnut_low_since is None:
+      self.chestnut_low_since = now
+    if not self.chestnut_power_low and now - self.chestnut_low_since >= CHESTNUT_POWER_LOW_DELAY:
+      self.chestnut_power_low = True
+      self.update_alert(AudibleAlert.prompt)
+
   def calculate_volume(self, weighted_db):
     volume = ((weighted_db - AMBIENT_DB) / DB_SCALE) * (MAX_VOLUME - MIN_VOLUME) + MIN_VOLUME
     return math.pow(VOLUME_BASE, (np.clip(volume, MIN_VOLUME, MAX_VOLUME) - 1))
@@ -180,7 +201,7 @@ class Soundd(QuietMode):
     import sounddevice as sd
     micd.patch_sounddevice(sd)
 
-    sm = messaging.SubMaster(['selfdriveState', 'selfdriveStateSP', 'soundPressure'])
+    sm = messaging.SubMaster(['selfdriveState', 'selfdriveStateSP', 'soundPressure', 'chestnutState'])
 
     with self.get_stream(sd) as stream:
       rk = Ratekeeper(20)
@@ -198,6 +219,7 @@ class Soundd(QuietMode):
             self.current_volume = self.calculate_volume(float(self.spl_filter_weighted.x))
 
         self.get_audible_alert(sm)
+        self.check_chestnut_power(sm)
 
         # Ramp up immediate warning sound over 4s
         if self.current_alert == AudibleAlert.warningImmediate:
