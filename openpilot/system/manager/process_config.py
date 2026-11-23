@@ -27,7 +27,9 @@ def iscar(started: bool, params: Params, CP: car.CarParams) -> bool:
 
 def logging(started: bool, params: Params, CP: car.CarParams) -> bool:
   run = (not CP.notCar) or not params.get_bool("DisableLogging")
-  return started and run
+  # OffroadLogging keeps the route recorder up while parked: CAN and the panda state
+  # keep arriving, so the route holds the minutes before shutdown and after boot.
+  return (started or params.get_bool("OffroadLogging")) and run
 
 def ublox_available() -> bool:
   return os.path.exists('/dev/ttyHS0') and not os.path.exists('/persist/comma/use-quectel-gps')
