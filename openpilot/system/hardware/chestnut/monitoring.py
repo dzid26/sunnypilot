@@ -1,6 +1,7 @@
 import os
 import struct
 import time
+from collections.abc import Callable
 
 import usb1
 
@@ -8,6 +9,7 @@ import openpilot.cereal.messaging as messaging
 from openpilot.cereal import log
 from openpilot.cereal.services import SERVICE_LIST
 from openpilot.common.hardware.usb import CHESTNUT_USB_PRODUCT, get_usb_state, is_chestnut_usb_id
+from openpilot.common.params import Params
 from openpilot.common.swaglog import cloudlog
 from openpilot.system.hardware.chestnut.status import CHESTNUT_POWER_LOW_DELAY, CHESTNUT_POWERED_VOLTAGE
 
@@ -17,14 +19,16 @@ SUPPLY_LOG_PATH = "/data/chestnut_supply.log"
 class SupplyLog:
   """Logs chestnut supply edges to swaglog and to a file that outlives the process."""
 
-  def __init__(self, path: str = SUPPLY_LOG_PATH):
+  def __init__(self, path: str = SUPPLY_LOG_PATH, model_reported: Callable[[], bool] | None = None):
     self.path = path
+    self._model_reported = model_reported
     self._persist = True
     self.low = self._ended_low()
     self.low_since: float | None = None
     self.sustained = False
+    self.level: str | None = None
 
-  def update(self, voltage: int, current: int, fault: bool, car: str, ign: str) -> None:
+  def update(self, voltage: int, current: int, fault: bool, car: str, ign: str, state: str) -> None:
     now = time.monotonic()
     if fault or voltage < CHESTNUT_POWERED_VOLTAGE:
       if self.low_since is None:
@@ -32,33 +36,45 @@ class SupplyLog:
       if not self.low:
         self.low = True
         self.sustained = False
-        self._warn(self._body("unpowered", voltage, current, fault, car, ign))
+        self.level = self._loss_level(state)
+        before_model_start = state == "onroad" and self._model_reported is not None and not self._model_reported()
+        self._emit(self.level, self._body("unpowered", voltage, current, fault, car, ign, state, before_model_start))
       elif not self.sustained and now - self.low_since >= CHESTNUT_POWER_LOW_DELAY:
         self.sustained = True
+        self.level = self.level or self._loss_level(state)
         label = f"still unpowered after {CHESTNUT_POWER_LOW_DELAY:.0f}s"
-        self._warn(self._body(label, voltage, current, fault, car, ign))
+        self._emit(self.level, self._body(label, voltage, current, fault, car, ign, state))
       return
 
     if self.low or self.low_since is not None:
       self.low = False
       self.low_since = None
       self.sustained = False
-      self._info(self._body("ok again", voltage, None, fault, car, ign))
+      self.level = None
+      self._emit("INFO", self._body("ok again", voltage, None, fault, car, ign, state))
 
   @staticmethod
-  def _body(label: str, voltage: int, current: int | None, fault: bool, car: str, ign: str) -> str:
+  def _loss_level(state: str) -> str:
+    # the car cutting accessory power offroad is expected; losing it onroad is not
+    return "INFO" if state == "offroad" else "WARNING"
+
+  @staticmethod
+  def _body(label: str, voltage: int, current: int | None, fault: bool, car: str, ign: str, state: str,
+            before_model_start: bool = False) -> str:
     body = f"chestnut supply {label}: {voltage} mV"
     if current is not None:
       body += f", {current} mA"
-    return body + f", fault={fault}, car={car}, ign={ign}"
+    body += f", fault={fault}, car={car}, ign={ign}, state={state}"
+    if before_model_start:
+      body += ", before_model_start=1"
+    return body
 
-  def _warn(self, body: str) -> None:
-    cloudlog.warning(body)
-    self._append("WARNING", body)
-
-  def _info(self, body: str) -> None:
-    cloudlog.info(body)
-    self._append("INFO", body)
+  def _emit(self, level: str, body: str) -> None:
+    if level == "WARNING":
+      cloudlog.warning(body)
+    else:
+      cloudlog.info(body)
+    self._append(level, body)
 
   def _append(self, level: str, body: str) -> None:
     if not self._persist:
@@ -82,14 +98,17 @@ class SupplyLog:
     return bool(lines) and ("supply unpowered" in lines[-1] or "still unpowered" in lines[-1])
 
   @staticmethod
-  def car_state(sm) -> tuple[str, str]:
+  def car_state(sm) -> tuple[str, str, str]:
     car = "n/a"
     if sm.alive['peripheralState'] and sm['peripheralState'].pandaType != log.PandaState.PandaType.unknown:
       car = f"{sm['peripheralState'].voltage} mV"
     ign = "?/?"
     if sm.alive['pandaStates'] and len(sm['pandaStates']) > 0:
       ign = f"{int(sm['pandaStates'][0].ignitionLine)}/{int(sm['pandaStates'][0].ignitionCan)}"
-    return car, ign
+    state = "unknown"
+    if sm.alive['deviceState']:
+      state = "onroad" if sm['deviceState'].started else "offroad"
+    return car, ign, state
 
 
 def read_chestnut_state(handle, gpu_state=None):
@@ -110,8 +129,9 @@ def read_chestnut_state(handle, gpu_state=None):
 
 def chestnut_state_thread(end_event):
   pm = messaging.PubMaster(['chestnutState'])
-  sm = messaging.SubMaster(['chestnutGpuState', 'peripheralState', 'pandaStates'])
-  supply_log = SupplyLog()
+  sm = messaging.SubMaster(['chestnutGpuState', 'peripheralState', 'pandaStates', 'deviceState'])
+  params = Params()
+  supply_log = SupplyLog(model_reported=lambda: params.get("ChestnutActive") is not None)
   with usb1.USBContext() as context:
     handle = None
     try:
@@ -129,8 +149,8 @@ def chestnut_state_thread(end_event):
           gpu_valid = sm.alive['chestnutGpuState'] and sm.valid['chestnutGpuState']
           msg = read_chestnut_state(handle, sm['chestnutGpuState'] if gpu_valid else None)
           if msg.valid:
-            car, ign = supply_log.car_state(sm)
-            supply_log.update(msg.chestnutState.supplyVoltage, msg.chestnutState.supplyCurrent, msg.chestnutState.supplyFault, car, ign)
+            car, ign, state = supply_log.car_state(sm)
+            supply_log.update(msg.chestnutState.supplyVoltage, msg.chestnutState.supplyCurrent, msg.chestnutState.supplyFault, car, ign, state)
           if not msg.valid:
             handle.close()
             handle = None
