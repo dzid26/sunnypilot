@@ -15,7 +15,7 @@ from openpilot.selfdrive.ui.mici.widgets.button import BigButton, BigParamContro
 from openpilot.selfdrive.ui.ui_state import ui_state, device
 from openpilot.selfdrive.ui.sunnypilot.model_info import (active_source, big_model_state, bundles_for_source, carrying_model,
                                                            default_model_name, model_cache_size_mb, model_info, queued_name,
-                                                           refresh_in_progress, refresh_model_list)
+                                                           refresh_in_progress, refresh_model_list, strip_release_date)
 from openpilot.system.ui.lib.application import FontWeight, gui_app
 from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.widgets import Widget
@@ -32,13 +32,13 @@ def _model_info() -> tuple[str, str, str]:
   if carry_display is None:
     big = get_selected_bundle(ui_state.params, "chestnut")
     carry_display = big.displayName if big else default_model_name("chestnut")
-  active_text = (carry_display or active_name).lower()
+  active_text = strip_release_date(carry_display or active_name).lower()
   if state == 'failed':
     return active_text, tr("big model"), tr("unavailable")
   if state == 'loading':
     return active_text, tr("big model"), tr("getting ready")
   header = tr("small model") if source == "chestnut" else tr("big model")
-  return active_text, header, other_name.lower()
+  return active_text, header, strip_release_date(other_name).lower()
 
 
 class CurrentModelInfo(Widget):

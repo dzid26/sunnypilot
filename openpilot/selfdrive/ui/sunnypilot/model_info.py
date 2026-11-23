@@ -6,6 +6,7 @@ See the LICENSE.md file in the root directory for more details.
 """
 import contextlib
 import os
+import re
 import time
 
 from openpilot.common.hardware.hw import Paths
@@ -13,6 +14,14 @@ from openpilot.selfdrive.ui.ui_state import ui_state, ChestnutState
 from openpilot.sunnypilot.models.fetcher import get_cached_bundles
 from openpilot.sunnypilot.models.helpers import get_active_source, get_selected_bundle, resolve_bundle_by_ref
 from openpilot.sunnypilot.models.model_name import DEFAULT_BIG_MODEL, DEFAULT_MODEL
+
+
+RELEASE_DATE = re.compile(r"\s*\([A-Za-z]+ \d{1,2}, \d{4}\)$")
+
+
+def strip_release_date(name: str) -> str:
+  """Bundle name without the release date the manifest appends, e.g. 'Tee Time'."""
+  return RELEASE_DATE.sub("", name)
 
 
 def model_cache_size_mb() -> float:
