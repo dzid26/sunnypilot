@@ -7,6 +7,7 @@ from openpilot.selfdrive.modeld.helpers import MODELS_DIR, chestnut_compiled
 
 CHESTNUT_RELEASE_BRANCHES = ("release-chestnut", "release-chestnut-staging", "nightly-chestnut", "nightly-chestnut-dev")
 CHESTNUT_POWERED_VOLTAGE = 5000
+CHESTNUT_POWER_LOW_DELAY = 3.  # s of an unpowered supply before it is reported, so a dip at engage does not trip it
 GPU_TEMP_LIMIT = 100.
 MEMORY_TEMP_LIMIT = 95.
 TEMP_HYSTERESIS = 5.

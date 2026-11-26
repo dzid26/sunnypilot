@@ -141,6 +141,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"InitialCruiseSpeedKph", {PERSISTENT, INT, "40"}},
     {"NavDestination", {CLEAR_ON_MANAGER_START | CLEAR_ON_OFFROAD_TRANSITION, JSON}},
     {"NavigationEnabled", {PERSISTENT, BOOL, "0"}},
+    {"OffroadLogging", {PERSISTENT, BOOL, "0"}},
     {"Offroad_ChestnutModelError", {CLEAR_ON_MANAGER_START, JSON}},
     {"Offroad_Pairing", {CLEAR_ON_MANAGER_START, JSON}},
     {"Offroad_UploadsIgnored", {CLEAR_ON_MANAGER_START, JSON}},
@@ -232,7 +233,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"SunnylinkCache_Users", {PERSISTENT, STRING}},
     {"SunnylinkDongleId", {PERSISTENT, STRING}},
     {"SunnylinkdPid", {PERSISTENT, INT}},
-    {"SunnylinkEnabled", {PERSISTENT, BOOL, "1"}},
+    {"SunnylinkEnabled", {PERSISTENT, BOOL, "0"}},
     {"SunnylinkTempFault", {CLEAR_ON_MANAGER_START | CLEAR_ON_OFFROAD_TRANSITION, BOOL, "0"}},
 
     // Backup Manager params

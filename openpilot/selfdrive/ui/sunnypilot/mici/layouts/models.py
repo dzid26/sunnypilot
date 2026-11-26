@@ -15,7 +15,7 @@ from openpilot.selfdrive.ui.mici.widgets.button import BigButton, BigParamContro
 from openpilot.selfdrive.ui.ui_state import ui_state, device
 from openpilot.selfdrive.ui.sunnypilot.model_info import (active_source, big_model_state, bundles_for_source, carrying_model,
                                                            default_model_name, model_cache_size_mb, model_info, queued_name,
-                                                           refresh_in_progress, refresh_model_list)
+                                                           refresh_in_progress, refresh_model_list, strip_release_date)
 from openpilot.system.ui.lib.application import FontWeight, gui_app
 from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.widgets import Widget
@@ -32,13 +32,13 @@ def _model_info() -> tuple[str, str, str]:
   if carry_display is None:
     big = get_selected_bundle(ui_state.params, "chestnut")
     carry_display = big.displayName if big else default_model_name("chestnut")
-  active_text = (carry_display or active_name).lower()
+  active_text = strip_release_date(carry_display or active_name).lower()
   if state == 'failed':
     return active_text, tr("big model"), tr("unavailable")
   if state == 'loading':
     return active_text, tr("big model"), tr("getting ready")
   header = tr("small model") if source == "chestnut" else tr("big model")
-  return active_text, header, other_name.lower()
+  return active_text, header, strip_release_date(other_name).lower()
 
 
 class CurrentModelInfo(Widget):
@@ -51,7 +51,7 @@ class CurrentModelInfo(Widget):
     subheader_color = rl.Color(255, 255, 255, int(255 * 0.9 * 0.65))
     max_width = int(self._rect.width - 20)
     active_text, info_header, info_text = _model_info()
-    self.current_model_header = UnifiedLabel(tr("active model"), 48, max_width=max_width, text_color=header_color, font_weight=FontWeight.DISPLAY)
+    self.current_model_header = UnifiedLabel(tr("ready"), 48, max_width=max_width, text_color=header_color, font_weight=FontWeight.DISPLAY)
     self.current_model_text = UnifiedLabel(active_text, 32, max_width=max_width, text_color=subheader_color, font_weight=FontWeight.ROMAN, scroll=True)
 
     self.info_header = UnifiedLabel(info_header, 48, max_width=max_width, text_color=header_color, font_weight=FontWeight.DISPLAY)
@@ -260,7 +260,16 @@ class ModelsLayoutMici(NavScroller):
     self.refresh_btn.set_enabled(ui_state.is_offroad() and not is_downloading and not refreshing)
     self.refresh_btn.set_value(tr("fetching...") if refreshing else "")
 
-    self.current_model_info.current_model_header.set_text(tr("active model"))
+    state = big_model_state()
+    if state == 'loading':
+      header_text = tr("getting ready")
+    elif ui_state.started:
+      header_text = tr("active model")
+    elif state == 'failed':
+      header_text = tr("unavailable")
+    else:
+      header_text = tr("ready")
+    self.current_model_info.current_model_header.set_text(header_text)
     active_text, info_header, info_text = _model_info()
     self.current_model_info.current_model_text.set_text(active_text)
     self.current_model_info.info_header.set_text(info_header)

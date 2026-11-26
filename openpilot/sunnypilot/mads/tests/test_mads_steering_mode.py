@@ -222,13 +222,14 @@ class TestBrandSteeringModeRestrictions(OpenpilotTestCase):
     assert read_steering_mode_param(CP, CP_SP, params) == MadsSteeringModeOnBrake.DISENGAGE
     params.get.assert_not_called()
 
-  def test_tesla_without_vehicle_bus_forced_to_disengage(self, mocker):
+  def test_tesla_without_vehicle_bus_uses_param(self, mocker):
+    # fork: Tesla is not MADS-limited
     CP = structs.CarParams()
     CP.brand = "tesla"
     CP_SP = structs.CarParamsSP()
     CP_SP.flags = 0
-    params = mocker.MagicMock()
-    assert read_steering_mode_param(CP, CP_SP, params) == MadsSteeringModeOnBrake.DISENGAGE
+    params = make_params_mock(mocker, {"MadsSteeringMode": MadsSteeringModeOnBrake.REMAIN_ACTIVE})
+    assert read_steering_mode_param(CP, CP_SP, params) == MadsSteeringModeOnBrake.REMAIN_ACTIVE
 
   @parameterized.expand([MadsScreenButtonType.THREE_FINGER,
                                              MadsScreenButtonType.FOUR_FINGER,
@@ -242,14 +243,14 @@ class TestBrandSteeringModeRestrictions(OpenpilotTestCase):
                                        "MadsSteeringMode": MadsSteeringModeOnBrake.REMAIN_ACTIVE})
     assert read_steering_mode_param(CP, CP_SP, params) == MadsSteeringModeOnBrake.REMAIN_ACTIVE
 
-  def test_tesla_with_vehicle_bus_screen_button_off_forced_to_disengage(self, mocker):
+  def test_tesla_screen_button_off_uses_param(self, mocker):
     CP = structs.CarParams()
     CP.brand = "tesla"
     CP_SP = structs.CarParamsSP()
     CP_SP.flags = TeslaFlagsSP.HAS_VEHICLE_BUS
     params = make_params_mock(mocker, {"TeslaMadsScreenButton": MadsScreenButtonType.OFF,
                                        "MadsSteeringMode": MadsSteeringModeOnBrake.REMAIN_ACTIVE})
-    assert read_steering_mode_param(CP, CP_SP, params) == MadsSteeringModeOnBrake.DISENGAGE
+    assert read_steering_mode_param(CP, CP_SP, params) == MadsSteeringModeOnBrake.REMAIN_ACTIVE
 
   @parameterized.expand(["hyundai", "toyota", "honda", "gm"], names=["brand"])
   def test_other_brands_use_param(self, mocker, brand):

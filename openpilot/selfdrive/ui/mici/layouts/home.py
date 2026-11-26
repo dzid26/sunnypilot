@@ -17,6 +17,7 @@ from openpilot.common.version import RELEASE_BRANCHES
 HEAD_BUTTON_FONT_SIZE = 40
 HOME_PADDING = 8
 ALERTS_ZONE_WIDTH = 180
+CHESTNUT_NO_POWER_COLOR = rl.Color(255, 60, 60, 255)
 
 NetworkType = log.DeviceState.NetworkType
 
@@ -130,8 +131,11 @@ class MiciHomeLayout(Widget):
 
     self._usb_icon = IconWidget("icons_mici/usb.png", (62, 40))
     self._chestnut_icon = IconWidget("icons_mici/chestnut_green.png", (54, 40))
+    self._chestnut_ready_icon = IconWidget("icons_mici/chestnut.png", (54, 40))
     self._chestnut_loading_icon = IconWidget("icons_mici/chestnut.png", (68, 40))
     self._chestnut_failed_icon = IconWidget("icons_mici/chestnut_orange.png", (68, 40))
+    self._chestnut_no_power_icon = IconWidget("icons_mici/chestnut.png", (54, 40))
+    self._chestnut_no_power_icon.set_color(CHESTNUT_NO_POWER_COLOR)
     self._mic_icon = IconWidget("icons_mici/microphone.png", (32, 46))
     self._body_icon = IconWidget("icons_mici/body.png", (54, 37))
 
@@ -142,8 +146,10 @@ class MiciHomeLayout(Widget):
       NetworkIcon(),
       self._usb_icon,
       self._chestnut_icon,
+      self._chestnut_ready_icon,
       self._chestnut_loading_icon,
       self._chestnut_failed_icon,
+      self._chestnut_no_power_icon,
       self._body_icon,
       self._mic_icon,
     ], spacing=18)
@@ -223,16 +229,18 @@ class MiciHomeLayout(Widget):
     usb_connected = ui_state.usb_connected
     usb_unknown = ui_state.usb_unknown
     chestnut_state = ui_state.chestnut_state
+    no_power = not usb_unknown and ui_state.chestnut_power_low
     if gui_app.sunnypilot_ui():
       self._set_chestnut_visibility()
     else:
       self._usb_icon.set_visible(usb_connected and usb_unknown)
-      self._chestnut_icon.set_visible(not usb_unknown and chestnut_state not in
-                                      (ChestnutState.LOADING, ChestnutState.UNCOMPILED, ChestnutState.FAILED) and
-                                      (usb_connected or chestnut_state in (ChestnutState.READY, ChestnutState.ACTIVE)))
-      self._chestnut_loading_icon.set_visible(not usb_unknown and chestnut_state == ChestnutState.LOADING)
+      self._chestnut_no_power_icon.set_visible(no_power)
+      self._chestnut_icon.set_visible(not no_power and not usb_unknown and chestnut_state == ChestnutState.ACTIVE)
+      self._chestnut_ready_icon.set_visible(not no_power and not usb_unknown and chestnut_state == ChestnutState.READY)
+      self._chestnut_loading_icon.set_visible(not no_power and not usb_unknown and chestnut_state == ChestnutState.LOADING)
       self._chestnut_loading_icon.set_opacity(0.35 + 0.65 * (0.5 - 0.5 * math.cos(rl.get_time() * 6.0)))
-      self._chestnut_failed_icon.set_visible(not usb_unknown and chestnut_state in (ChestnutState.UNCOMPILED, ChestnutState.FAILED))
+      self._chestnut_failed_icon.set_visible(not no_power and not usb_unknown and
+                                             chestnut_state in (ChestnutState.UNCOMPILED, ChestnutState.FAILED))
     self._mic_icon.set_visible(ui_state.recording_audio)
     self._body_icon.set_visible(bool(ui_state.is_body))
 

@@ -4,6 +4,7 @@ Copyright (c) 2021-, Haibin Wen, sunnypilot, and a number of other contributors.
 This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
+import time
 from enum import Enum
 
 from openpilot.cereal import messaging, log, custom
@@ -13,6 +14,7 @@ from openpilot.common.params import Params
 from openpilot.selfdrive.ui.sunnypilot.layouts.settings.display import OnroadBrightness
 from openpilot.sunnypilot.models.helpers import ACTIVE_BUNDLE_KEYS, get_active_source
 from openpilot.sunnypilot.sunnylink.sunnylink_state import SunnylinkState
+from openpilot.system.hardware.chestnut.status import CHESTNUT_POWERED_VOLTAGE, CHESTNUT_POWER_LOW_DELAY
 from openpilot.system.ui.lib.application import gui_app
 from openpilot.system.ui.sunnypilot.widgets.screen_saver import ScreenSaverSP
 
@@ -36,7 +38,8 @@ class UIStateSP:
     self.is_sp_release: bool = self.params.get_bool("IsReleaseSpBranch")
     self.sm_services_ext = [
       "modelManagerSP", "selfdriveStateSP", "longitudinalPlanSP", "backupManagerSP",
-      "lateralTorqueParameters", "carStateSP", "liveMapDataSP", "carParamsSP", "lateralDelay", "modelDataV2SP"
+      "lateralTorqueParameters", "carStateSP", "liveMapDataSP", "carParamsSP", "lateralDelay", "modelDataV2SP",
+      "chestnutState"
     ]
 
     self.sunnylink_state = SunnylinkState()
@@ -66,12 +69,31 @@ class UIStateSP:
     self.custom_torque_params: bool = False
     self.torque_override_enabled: bool = False
     self._sp_initialized: bool = False
+    self.chestnut_power_low: bool = False
+    self._chestnut_power_low_since: float | None = None
 
   def update(self) -> None:
     if self.sunnylink_enabled:
       self.sunnylink_state.start()
     else:
       self.sunnylink_state.stop()
+
+    self._update_chestnut_power()
+
+  def _update_chestnut_power(self) -> None:
+    # no message means the eGPU is not enumerating, not that its supply is bad
+    state = self.sm["chestnutState"]
+    low = self.sm.alive["chestnutState"] and (state.supplyFault or state.supplyVoltage < CHESTNUT_POWERED_VOLTAGE)
+
+    if not low:
+      self._chestnut_power_low_since = None
+      self.chestnut_power_low = False
+      return
+
+    now = time.monotonic()
+    if self._chestnut_power_low_since is None:
+      self._chestnut_power_low_since = now
+    self.chestnut_power_low = now - self._chestnut_power_low_since >= CHESTNUT_POWER_LOW_DELAY
 
   def onroad_brightness_handle_alerts(self, _ui_state, alert):
     if _ui_state.sm.recv_frame["carState"] < _ui_state.started_frame:

@@ -4,7 +4,8 @@ import platform
 
 from opendbc.car.structs import car
 from openpilot.cereal import custom
-from openpilot.common.params import Params
+from openpilot.common.params import Params, UnknownKeyName
+from openpilot.common.swaglog import cloudlog
 from openpilot.common.hardware import PC, COMMA_HARDWARE
 from openpilot.system.manager.process import PythonProcess, NativeProcess, DaemonProcess
 from openpilot.common.hardware.hw import Paths
@@ -25,9 +26,24 @@ def notcar(started: bool, params: Params, CP: car.CarParams) -> bool:
 def iscar(started: bool, params: Params, CP: car.CarParams) -> bool:
   return started and not CP.notCar
 
+_offroad_key_missing = False
+
+
 def logging(started: bool, params: Params, CP: car.CarParams) -> bool:
+  global _offroad_key_missing
   run = (not CP.notCar) or not params.get_bool("DisableLogging")
-  return started and run
+  # OffroadLogging keeps the route recorder up while parked: CAN and the panda state
+  # keep arriving, so the route holds the minutes before shutdown and after boot.
+  try:
+    offroad = params.get_bool("OffroadLogging")
+  except UnknownKeyName:
+    # a params lib built before the key exists still records onroad; the manager
+    # runs every predicate every tick, so say it once rather than every second
+    if not _offroad_key_missing:
+      _offroad_key_missing = True
+      cloudlog.warning("OffroadLogging is not in this build's params lib, logging onroad only")
+    offroad = False
+  return (started or offroad) and run
 
 def ublox_available() -> bool:
   return os.path.exists('/dev/ttyHS0') and not os.path.exists('/persist/comma/use-quectel-gps')
@@ -129,7 +145,7 @@ procs = [
   PythonProcess("mapsd", "openpilot.selfdrive.navigation.mapsd", navigation),
   PythonProcess("dmonitoringmodeld", "openpilot.selfdrive.modeld.dmonitoringmodeld", driverview, enabled=(WEBCAM or not PC)),
 
-  PythonProcess("sensord", "openpilot.system.sensord.sensord", only_onroad, enabled=not PC),
+  PythonProcess("sensord", "openpilot.system.sensord.sensord", always_run, enabled=not PC),
   PythonProcess("ui", "openpilot.selfdrive.ui.ui", always_run),
   PythonProcess("soundd", "openpilot.selfdrive.ui.soundd", driverview),
   PythonProcess("locationd", "openpilot.selfdrive.locationd.locationd", only_onroad),
